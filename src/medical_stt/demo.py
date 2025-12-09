@@ -61,9 +61,22 @@ def run_demo():
     # Generate test audio (or load from file if provided)
     if len(sys.argv) > 2:
         audio_file = sys.argv[2]
+    else:
+        # Check for default test file
+        import os
+        default_files = ["tests.wav", "test.wav", "samples/sample_english.wav"]
+        audio_file = None
+        for f in default_files:
+            if os.path.exists(f):
+                audio_file = f
+                break
+
+    if audio_file:
         print(f"Loading audio from: {audio_file}")
         from .audio_utils import load_audio_file
         audio, sr = load_audio_file(audio_file, target_sr=config.audio.sample_rate)
+        duration = len(audio) / config.audio.sample_rate
+        print(f"Audio duration: {duration:.1f} seconds")
     else:
         print("Using generated test audio (silence - for real test, provide audio file)")
         print("Usage: python -m src.medical_stt.demo [model] [audio_file.wav]")
