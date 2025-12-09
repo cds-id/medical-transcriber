@@ -147,26 +147,33 @@ class HuggingFaceBackend(TranscriberBackend):
         sample_rate: int,
         language: Optional[str] = None,
     ) -> TranscriptionResult:
-        """Transcribe audio to text."""
+        """Transcribe audio to text (supports long-form audio)."""
         if not self.is_loaded():
             raise RuntimeError("Model not loaded. Call load() first.")
 
         import torch
 
-        # Process audio
+        # Process audio - use return_attention_mask for long audio
         inputs = self._processor(
             audio,
             sampling_rate=sample_rate,
             return_tensors="pt",
+            return_attention_mask=True,
         )
 
         # Ensure input features match model dtype (fix float32/float16 mismatch on CUDA)
         input_features = inputs.input_features.to(self._device, dtype=self._torch_dtype)
+        attention_mask = inputs.attention_mask.to(self._device) if hasattr(inputs, 'attention_mask') and inputs.attention_mask is not None else None
 
-        # Generate
-        generate_kwargs = {"task": self.config.task}
+        # Generate with long-form transcription support
+        generate_kwargs = {
+            "task": self.config.task,
+            "return_timestamps": True,  # Enable long-form transcription
+        }
         if language:
             generate_kwargs["language"] = language
+        if attention_mask is not None:
+            generate_kwargs["attention_mask"] = attention_mask
 
         with torch.no_grad():
             predicted_ids = self._model.generate(

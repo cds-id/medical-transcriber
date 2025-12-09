@@ -73,17 +73,23 @@ def run_demo():
         audio = generate_test_audio(duration_seconds=3.0)
 
     # Transcribe
-    print("Transcribing...")
+    print("Transcribing... (this may take a while for long audio)")
     print("-" * 50)
+
+    import time
+    start_time = time.time()
 
     result = transcriber.transcribe(audio)
 
-    print(f"Transcription: {result.text}")
+    elapsed = time.time() - start_time
+    print(f"\nTranscription ({elapsed:.1f}s):")
+    print("-" * 50)
+    print(result.text)
     print("-" * 50)
     print()
 
     if result.text.strip():
-        print("✓ Transcription complete!")
+        print(f"✓ Transcription complete! ({elapsed:.1f} seconds)")
     else:
         print("(No speech detected in audio)")
 
