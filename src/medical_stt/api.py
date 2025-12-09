@@ -514,7 +514,7 @@ def _check_ollama_running() -> bool:
 @app.post("/api/image/load")
 async def load_image_model():
     """
-    Load SDXL Turbo model for image generation.
+    Load RealVisXL V4 model for image generation.
 
     IMPORTANT: Call /api/unload first to free GPU memory!
     """
@@ -522,7 +522,7 @@ async def load_image_model():
         if image_gen.is_loaded():
             return JSONResponse(content={
                 "success": True,
-                "message": "SDXL Turbo model already loaded",
+                "message": "RealVisXL V4 model already loaded",
                 "memory": image_gen.get_memory_usage(),
             })
 
@@ -530,7 +530,7 @@ async def load_image_model():
 
         return JSONResponse(content={
             "success": True,
-            "message": "SDXL Turbo loaded successfully (~7GB VRAM)",
+            "message": "RealVisXL V4 loaded successfully (~7GB VRAM)",
             "memory": image_gen.get_memory_usage(),
         })
     except Exception as e:
@@ -542,13 +542,13 @@ async def load_image_model():
 
 @app.post("/api/image/unload")
 async def unload_image_model():
-    """Unload SDXL Turbo model to free GPU memory."""
+    """Unload RealVisXL V4 model to free GPU memory."""
     try:
         unloaded = image_gen.unload_model()
         return JSONResponse(content={
             "success": True,
             "unloaded": unloaded,
-            "message": "SDXL Turbo model unloaded" if unloaded else "SDXL Turbo model was not loaded",
+            "message": "RealVisXL V4 model unloaded" if unloaded else "RealVisXL V4 model was not loaded",
             "memory": image_gen.get_memory_usage(),
         })
     except Exception as e:
@@ -561,13 +561,14 @@ async def unload_image_model():
 @app.post("/api/image/generate")
 async def generate_image(
     prompt: str = Query(..., description="Text description of the image to generate"),
-    width: int = Query(default=512, ge=256, le=1024, description="Image width"),
-    height: int = Query(default=512, ge=256, le=1024, description="Image height"),
-    steps: int = Query(default=4, ge=1, le=10, description="Number of inference steps (1-4 recommended)"),
+    negative_prompt: str = Query(default="low quality, blurry, distorted, deformed, ugly, bad anatomy", description="What to avoid in the image"),
+    width: int = Query(default=1024, ge=512, le=1024, description="Image width"),
+    height: int = Query(default=1024, ge=512, le=1024, description="Image height"),
+    steps: int = Query(default=25, ge=10, le=50, description="Number of inference steps (20-30 recommended)"),
     seed: Optional[int] = Query(default=None, description="Random seed for reproducibility"),
 ):
     """
-    Generate an image from a text prompt using SDXL Turbo.
+    Generate an image from a text prompt using RealVisXL V4.
 
     Returns base64 encoded PNG image.
     """
@@ -587,6 +588,7 @@ async def generate_image(
 
         result = image_gen.generate_image(
             prompt=prompt,
+            negative_prompt=negative_prompt,
             width=width,
             height=height,
             num_inference_steps=steps,
@@ -611,10 +613,10 @@ async def generate_image(
 
 @app.get("/api/image/status")
 async def image_model_status():
-    """Check if SDXL Turbo model is loaded."""
+    """Check if RealVisXL V4 model is loaded."""
     return {
         "loaded": image_gen.is_loaded(),
-        "model": "SDXL Turbo" if image_gen.is_loaded() else None,
+        "model": "RealVisXL V4" if image_gen.is_loaded() else None,
         "memory": image_gen.get_memory_usage(),
     }
 

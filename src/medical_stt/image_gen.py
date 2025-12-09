@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Image generation module using SDXL Turbo."""
+"""Image generation module using RealVisXL V4."""
 
 import os
 import gc
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Global model instance
 _pipe = None
 _device = None
-_model_name = "stabilityai/sdxl-turbo"
+_model_name = "SG161222/RealVisXL_V4.0"
 
 
 def get_device() -> str:
@@ -28,24 +28,24 @@ def get_device() -> str:
 
 def load_model(device: Optional[str] = None):
     """
-    Load SDXL Turbo model.
+    Load RealVisXL V4 model.
 
     Note: Call /api/unload first to free GPU memory!
     """
     global _pipe, _device
 
     if _pipe is not None:
-        logger.info("SDXL Turbo model already loaded")
+        logger.info("RealVisXL V4 model already loaded")
         return _pipe
 
     _device = device or get_device()
 
-    logger.info(f"Loading SDXL Turbo on {_device}...")
+    logger.info(f"Loading RealVisXL V4 on {_device}...")
 
     # Check imports first
     try:
         import torch
-        from diffusers import AutoPipelineForText2Image
+        from diffusers import DiffusionPipeline
     except ImportError as e:
         raise ImportError(
             "Please install diffusers: pip install diffusers transformers accelerate"
@@ -56,11 +56,12 @@ def load_model(device: Optional[str] = None):
 
     logger.info(f"Using dtype: {torch_dtype}")
 
-    # Load SDXL Turbo - smaller and faster than FLUX
-    _pipe = AutoPipelineForText2Image.from_pretrained(
+    # Load RealVisXL V4 - photorealistic quality
+    _pipe = DiffusionPipeline.from_pretrained(
         _model_name,
         torch_dtype=torch_dtype,
         variant="fp16" if _device == "cuda" else None,
+        use_safetensors=True,
     )
 
     _pipe = _pipe.to(_device)
@@ -74,7 +75,7 @@ def load_model(device: Optional[str] = None):
         except:
             pass
 
-    logger.info("SDXL Turbo loaded successfully")
+    logger.info("RealVisXL V4 loaded successfully")
     return _pipe
 
 
@@ -97,23 +98,24 @@ def unload_model():
         except:
             pass
 
-        logger.info("SDXL Turbo model unloaded")
+        logger.info("RealVisXL V4 model unloaded")
         return True
 
     return False
 
 
 def is_loaded() -> bool:
-    """Check if SDXL Turbo model is loaded."""
+    """Check if RealVisXL V4 model is loaded."""
     return _pipe is not None
 
 
 def generate_image(
     prompt: str,
-    width: int = 512,
-    height: int = 512,
-    num_inference_steps: int = 4,  # SDXL Turbo is fast, 1-4 steps
-    guidance_scale: float = 0.0,  # Turbo doesn't need guidance
+    negative_prompt: str = "low quality, blurry, distorted, deformed, ugly, bad anatomy",
+    width: int = 1024,
+    height: int = 1024,
+    num_inference_steps: int = 25,  # RealVisXL needs more steps for quality
+    guidance_scale: float = 7.0,  # Standard guidance for SDXL models
     seed: Optional[int] = None,
     output_path: Optional[str] = None,
 ) -> dict:
@@ -122,10 +124,11 @@ def generate_image(
 
     Args:
         prompt: Text description of the image to generate
-        width: Image width (default 512)
-        height: Image height (default 512)
-        num_inference_steps: Number of denoising steps (default 4 for Turbo)
-        guidance_scale: Guidance scale (0.0 for Turbo)
+        negative_prompt: What to avoid in the image
+        width: Image width (default 1024)
+        height: Image height (default 1024)
+        num_inference_steps: Number of denoising steps (default 25)
+        guidance_scale: Guidance scale (7.0 recommended)
         seed: Random seed for reproducibility
         output_path: Optional path to save the image
 
@@ -135,7 +138,7 @@ def generate_image(
     global _pipe
 
     if _pipe is None:
-        raise RuntimeError("SDXL Turbo model not loaded. Call load_model() first.")
+        raise RuntimeError("RealVisXL V4 model not loaded. Call load_model() first.")
 
     import torch
     from io import BytesIO
@@ -151,6 +154,7 @@ def generate_image(
     # Generate image
     result = _pipe(
         prompt=prompt,
+        negative_prompt=negative_prompt,
         width=width,
         height=height,
         num_inference_steps=num_inference_steps,
