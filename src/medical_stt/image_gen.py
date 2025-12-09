@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Image generation module using FLUX.1 Schnell."""
+"""Image generation module using SDXL Turbo."""
 
 import os
 import gc
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 # Global model instance
 _pipe = None
 _device = None
+_model_name = "stabilityai/sdxl-turbo"
 
 
 def get_device() -> str:
@@ -27,45 +28,39 @@ def get_device() -> str:
 
 def load_model(device: Optional[str] = None):
     """
-    Load FLUX.1 Schnell model.
+    Load SDXL Turbo model.
 
     Note: Call /api/unload first to free GPU memory!
     """
     global _pipe, _device
 
     if _pipe is not None:
-        logger.info("FLUX model already loaded")
+        logger.info("SDXL Turbo model already loaded")
         return _pipe
 
     _device = device or get_device()
 
-    logger.info(f"Loading FLUX.1 Schnell on {_device}...")
+    logger.info(f"Loading SDXL Turbo on {_device}...")
 
     # Check imports first
     try:
         import torch
-        from diffusers import FluxPipeline
+        from diffusers import AutoPipelineForText2Image
     except ImportError as e:
         raise ImportError(
             "Please install diffusers: pip install diffusers transformers accelerate"
         ) from e
 
-    # Determine dtype - T4 doesn't support bfloat16, use float16 instead
-    if _device == "cuda":
-        # Check if GPU supports bfloat16
-        if torch.cuda.is_bf16_supported():
-            torch_dtype = torch.bfloat16
-        else:
-            torch_dtype = torch.float16
-    else:
-        torch_dtype = torch.float32
+    # Use float16 for GPU
+    torch_dtype = torch.float16 if _device == "cuda" else torch.float32
 
     logger.info(f"Using dtype: {torch_dtype}")
 
-    # Load with optimizations for T4
-    _pipe = FluxPipeline.from_pretrained(
-        "black-forest-labs/FLUX.1-schnell",
+    # Load SDXL Turbo - smaller and faster than FLUX
+    _pipe = AutoPipelineForText2Image.from_pretrained(
+        _model_name,
         torch_dtype=torch_dtype,
+        variant="fp16" if _device == "cuda" else None,
     )
 
     _pipe = _pipe.to(_device)
@@ -79,7 +74,7 @@ def load_model(device: Optional[str] = None):
         except:
             pass
 
-    logger.info("FLUX.1 Schnell loaded successfully")
+    logger.info("SDXL Turbo loaded successfully")
     return _pipe
 
 
@@ -102,23 +97,23 @@ def unload_model():
         except:
             pass
 
-        logger.info("FLUX model unloaded")
+        logger.info("SDXL Turbo model unloaded")
         return True
 
     return False
 
 
 def is_loaded() -> bool:
-    """Check if FLUX model is loaded."""
+    """Check if SDXL Turbo model is loaded."""
     return _pipe is not None
 
 
 def generate_image(
     prompt: str,
-    width: int = 1024,
-    height: int = 1024,
-    num_inference_steps: int = 4,  # FLUX Schnell is fast, 4 steps is good
-    guidance_scale: float = 0.0,  # Schnell doesn't use guidance
+    width: int = 512,
+    height: int = 512,
+    num_inference_steps: int = 4,  # SDXL Turbo is fast, 1-4 steps
+    guidance_scale: float = 0.0,  # Turbo doesn't need guidance
     seed: Optional[int] = None,
     output_path: Optional[str] = None,
 ) -> dict:
@@ -127,10 +122,10 @@ def generate_image(
 
     Args:
         prompt: Text description of the image to generate
-        width: Image width (default 1024)
-        height: Image height (default 1024)
-        num_inference_steps: Number of denoising steps (default 4 for Schnell)
-        guidance_scale: Guidance scale (0.0 for Schnell)
+        width: Image width (default 512)
+        height: Image height (default 512)
+        num_inference_steps: Number of denoising steps (default 4 for Turbo)
+        guidance_scale: Guidance scale (0.0 for Turbo)
         seed: Random seed for reproducibility
         output_path: Optional path to save the image
 
@@ -140,7 +135,7 @@ def generate_image(
     global _pipe
 
     if _pipe is None:
-        raise RuntimeError("FLUX model not loaded. Call load_model() first.")
+        raise RuntimeError("SDXL Turbo model not loaded. Call load_model() first.")
 
     import torch
     from io import BytesIO

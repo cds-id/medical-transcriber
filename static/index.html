@@ -206,10 +206,10 @@
 
         <!-- Image Generation Section -->
         <div class="card">
-            <h2>🎨 Image Generation (FLUX.1 Schnell)</h2>
+            <h2>🎨 Image Generation (SDXL Turbo)</h2>
             <div class="controls">
-                <button class="btn btn-unload" id="loadFluxBtn">Load FLUX Model</button>
-                <button class="btn" id="unloadFluxBtn">Unload FLUX</button>
+                <button class="btn btn-unload" id="loadFluxBtn">Load SDXL Turbo</button>
+                <button class="btn" id="unloadFluxBtn">Unload Model</button>
             </div>
             <div class="image-gen-form">
                 <textarea id="imagePrompt" placeholder="Describe the image you want to generate..." rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; margin: 10px 0; font-family: inherit;"></textarea>
@@ -217,21 +217,20 @@
                     <label style="display: flex; align-items: center; gap: 5px;">
                         Size:
                         <select id="imageSize" class="language-select">
-                            <option value="1024x1024">1024x1024</option>
-                            <option value="768x768">768x768</option>
                             <option value="512x512">512x512</option>
-                            <option value="1024x768">1024x768 (Landscape)</option>
-                            <option value="768x1024">768x1024 (Portrait)</option>
+                            <option value="768x768">768x768</option>
+                            <option value="512x768">512x768 (Portrait)</option>
+                            <option value="768x512">768x512 (Landscape)</option>
                         </select>
                     </label>
                     <label style="display: flex; align-items: center; gap: 5px;">
                         Steps:
-                        <input type="number" id="imageSteps" value="4" min="1" max="50" style="width: 60px; padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
+                        <input type="number" id="imageSteps" value="4" min="1" max="10" style="width: 60px; padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
                     </label>
                     <button class="btn" id="generateImageBtn" style="background: #6f42c1;">Generate Image</button>
                 </div>
             </div>
-            <div class="status" id="imageStatus">Load FLUX model first (unload Whisper to free GPU memory)</div>
+            <div class="status" id="imageStatus">Load SDXL Turbo model first (~7GB VRAM needed)</div>
             <div class="image-result" id="imageResult" style="margin-top: 15px; text-align: center;">
                 <p style="color: #999;">Generated image will appear here...</p>
             </div>
@@ -511,7 +510,7 @@
         generateImageBtn.addEventListener('click', generateImage);
 
         async function loadFluxModel() {
-            imageStatus.textContent = 'Loading FLUX.1 Schnell model (this may take a few minutes)...';
+            imageStatus.textContent = 'Loading SDXL Turbo model (this may take a few minutes)...';
             loadFluxBtn.disabled = true;
 
             try {
@@ -534,7 +533,7 @@
         }
 
         async function unloadFluxModel() {
-            imageStatus.textContent = 'Unloading FLUX model...';
+            imageStatus.textContent = 'Unloading SDXL Turbo model...';
 
             try {
                 const response = await fetch(`${API_URL}/api/image/unload`, { method: 'POST' });
