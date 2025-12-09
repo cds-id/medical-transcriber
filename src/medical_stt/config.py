@@ -9,6 +9,7 @@ class ModelType(Enum):
     """Available Whisper models."""
 
     WHISPER_LARGE_V3 = "openai/whisper-large-v3"
+    NUSA_STT_ID = "nusa-id/tts-16bit"
 
     @classmethod
     def get_default(cls) -> "ModelType":
@@ -112,6 +113,14 @@ class Config:
         """Create config for Indonesian transcription."""
         return cls(
             model_type=ModelType.WHISPER_LARGE_V3,
+            language="id",
+        )
+
+    @classmethod
+    def for_nusa_id(cls) -> "Config":
+        """Create config for Nusa Indonesian STT."""
+        return cls(
+            model_type=ModelType.NUSA_STT_ID,
             language="id",
         )
 

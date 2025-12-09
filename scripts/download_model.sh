@@ -26,6 +26,7 @@ fi
 # Available models
 MODELS=(
     "openai/whisper-large-v3"
+    "nusa-id/tts-16bit"
 )
 
 print_header() {
@@ -40,6 +41,8 @@ print_models() {
     echo -e "${YELLOW}Available models:${NC}"
     echo ""
     echo "  1) openai/whisper-large-v3      (~3GB)    - OpenAI Whisper Large V3"
+    echo "  2) nusa-id/tts-16bit            (~)       - Nusa Indonesian STT"
+    echo "  3) all                                    - Download all models"
     echo ""
 }
 
@@ -100,9 +103,30 @@ main() {
     activate_venv
     install_dependencies
 
-    print_models
-    echo -e "${GREEN}Downloading openai/whisper-large-v3...${NC}"
-    download_model "${MODELS[0]}"
+    if [ -n "$1" ]; then
+        choice="$1"
+    else
+        print_models
+        read -p "Select model to download (1-3): " choice
+    fi
+
+    case $choice in
+        1)
+            download_model "${MODELS[0]}"
+            ;;
+        2)
+            download_model "${MODELS[1]}"
+            ;;
+        3|all)
+            for model in "${MODELS[@]}"; do
+                download_model "$model"
+            done
+            ;;
+        *)
+            echo -e "${RED}Invalid selection${NC}"
+            exit 1
+            ;;
+    esac
 
     echo ""
     echo -e "${GREEN}========================================"
