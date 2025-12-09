@@ -80,6 +80,29 @@ async def health():
     }
 
 
+def convert_to_wav(input_path: str, output_path: str) -> bool:
+    """Convert audio file to WAV format using ffmpeg."""
+    import subprocess
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", input_path,
+            "-ar", "16000", "-ac", "1", "-f", "wav", output_path
+        ], check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+    except FileNotFoundError:
+        # ffmpeg not installed, try pydub
+        try:
+            from pydub import AudioSegment
+            audio = AudioSegment.from_file(input_path)
+            audio = audio.set_frame_rate(16000).set_channels(1)
+            audio.export(output_path, format="wav")
+            return True
+        except:
+            return False
+
+
 @app.post("/api/transcribe/upload")
 async def transcribe_upload(
     file: UploadFile = File(...),
@@ -88,7 +111,7 @@ async def transcribe_upload(
     """
     Upload audio file and get transcription.
 
-    Supports: wav, mp3, flac, ogg, m4a
+    Supports: wav, mp3, flac, ogg, m4a, webm
     """
     try:
         # Read uploaded file
@@ -100,13 +123,30 @@ async def transcribe_upload(
             tmp.write(content)
             tmp_path = tmp.name
 
+        wav_path = tmp_path
+
+        # Convert non-wav formats (especially webm from browser)
+        if suffix.lower() in ['.webm', '.ogg', '.m4a', '.mp4', '.mp3', '.flac']:
+            wav_path = tmp_path + ".wav"
+            if not convert_to_wav(tmp_path, wav_path):
+                os.unlink(tmp_path)
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": f"Could not convert {suffix} format. Please install ffmpeg.",
+                    }
+                )
+
         # Load audio
         from .audio_utils import load_audio_file
-        audio, sr = load_audio_file(tmp_path, target_sr=16000)
+        audio, sr = load_audio_file(wav_path, target_sr=16000)
 
-        # Clean up temp file
-        import os
-        os.unlink(tmp_path)
+        # Clean up temp files
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        if wav_path != tmp_path and os.path.exists(wav_path):
+            os.unlink(wav_path)
 
         # Get transcriber and transcribe
         trans = get_transcriber()
