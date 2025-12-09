@@ -171,11 +171,11 @@ class HuggingFaceBackend(TranscriberBackend):
 
         # Use pipeline with chunking for long audio
         # chunk_length_s=30 processes 30 second chunks
-        # batch_size=16 for GPU efficiency
+        # batch_size=1 to reduce GPU memory usage
         result = self._pipe(
             {"array": audio, "sampling_rate": sample_rate},
             chunk_length_s=30,
-            batch_size=16,
+            batch_size=1,
             return_timestamps=True,
             generate_kwargs=generate_kwargs,
         )
