@@ -41,34 +41,46 @@ def load_model(device: Optional[str] = None):
 
     logger.info(f"Loading FLUX.1 Schnell on {_device}...")
 
+    # Check imports first
     try:
         import torch
         from diffusers import FluxPipeline
-
-        # Load with optimizations for T4
-        _pipe = FluxPipeline.from_pretrained(
-            "black-forest-labs/FLUX.1-schnell",
-            torch_dtype=torch.bfloat16 if _device == "cuda" else torch.float32,
-        )
-
-        _pipe = _pipe.to(_device)
-
-        # Enable memory optimizations
-        if _device == "cuda":
-            _pipe.enable_attention_slicing()
-            # Try to enable xformers if available
-            try:
-                _pipe.enable_xformers_memory_efficient_attention()
-            except:
-                pass
-
-        logger.info("FLUX.1 Schnell loaded successfully")
-        return _pipe
-
     except ImportError as e:
         raise ImportError(
             "Please install diffusers: pip install diffusers transformers accelerate"
         ) from e
+
+    # Determine dtype - T4 doesn't support bfloat16, use float16 instead
+    if _device == "cuda":
+        # Check if GPU supports bfloat16
+        if torch.cuda.is_bf16_supported():
+            torch_dtype = torch.bfloat16
+        else:
+            torch_dtype = torch.float16
+    else:
+        torch_dtype = torch.float32
+
+    logger.info(f"Using dtype: {torch_dtype}")
+
+    # Load with optimizations for T4
+    _pipe = FluxPipeline.from_pretrained(
+        "black-forest-labs/FLUX.1-schnell",
+        torch_dtype=torch_dtype,
+    )
+
+    _pipe = _pipe.to(_device)
+
+    # Enable memory optimizations
+    if _device == "cuda":
+        _pipe.enable_attention_slicing()
+        # Try to enable xformers if available
+        try:
+            _pipe.enable_xformers_memory_efficient_attention()
+        except:
+            pass
+
+    logger.info("FLUX.1 Schnell loaded successfully")
+    return _pipe
 
 
 def unload_model():
