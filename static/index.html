@@ -203,6 +203,39 @@
             <div class="status" id="streamStatus">Click "Start Recording" to begin</div>
             <div class="result" id="streamResult">Transcription will appear here...</div>
         </div>
+
+        <!-- Image Generation Section -->
+        <div class="card">
+            <h2>🎨 Image Generation (FLUX.1 Schnell)</h2>
+            <div class="controls">
+                <button class="btn btn-unload" id="loadFluxBtn">Load FLUX Model</button>
+                <button class="btn" id="unloadFluxBtn">Unload FLUX</button>
+            </div>
+            <div class="image-gen-form">
+                <textarea id="imagePrompt" placeholder="Describe the image you want to generate..." rows="3" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; margin: 10px 0; font-family: inherit;"></textarea>
+                <div class="controls">
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        Size:
+                        <select id="imageSize" class="language-select">
+                            <option value="1024x1024">1024x1024</option>
+                            <option value="768x768">768x768</option>
+                            <option value="512x512">512x512</option>
+                            <option value="1024x768">1024x768 (Landscape)</option>
+                            <option value="768x1024">768x1024 (Portrait)</option>
+                        </select>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        Steps:
+                        <input type="number" id="imageSteps" value="4" min="1" max="50" style="width: 60px; padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
+                    </label>
+                    <button class="btn" id="generateImageBtn" style="background: #6f42c1;">Generate Image</button>
+                </div>
+            </div>
+            <div class="status" id="imageStatus">Load FLUX model first (unload Whisper to free GPU memory)</div>
+            <div class="image-result" id="imageResult" style="margin-top: 15px; text-align: center;">
+                <p style="color: #999;">Generated image will appear here...</p>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -461,6 +494,111 @@
             }
 
             transcribeBtn.disabled = false;
+        }
+
+        // Image Generation functionality
+        const loadFluxBtn = document.getElementById('loadFluxBtn');
+        const unloadFluxBtn = document.getElementById('unloadFluxBtn');
+        const imagePrompt = document.getElementById('imagePrompt');
+        const imageSize = document.getElementById('imageSize');
+        const imageSteps = document.getElementById('imageSteps');
+        const generateImageBtn = document.getElementById('generateImageBtn');
+        const imageStatus = document.getElementById('imageStatus');
+        const imageResult = document.getElementById('imageResult');
+
+        loadFluxBtn.addEventListener('click', loadFluxModel);
+        unloadFluxBtn.addEventListener('click', unloadFluxModel);
+        generateImageBtn.addEventListener('click', generateImage);
+
+        async function loadFluxModel() {
+            imageStatus.textContent = 'Loading FLUX.1 Schnell model (this may take a few minutes)...';
+            loadFluxBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/image/load`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    imageStatus.innerHTML = `<span style="color: #28a745;">✓ ${data.message}</span>`;
+                    if (data.memory && data.memory.allocated_mb) {
+                        imageStatus.innerHTML += ` (GPU: ${data.memory.allocated_mb} MB)`;
+                    }
+                } else {
+                    imageStatus.textContent = `✗ Error: ${data.error}`;
+                }
+            } catch (error) {
+                imageStatus.textContent = `✗ Error: ${error.message}`;
+            }
+
+            loadFluxBtn.disabled = false;
+        }
+
+        async function unloadFluxModel() {
+            imageStatus.textContent = 'Unloading FLUX model...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/image/unload`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    imageStatus.innerHTML = `<span style="color: #28a745;">✓ ${data.message}</span>`;
+                } else {
+                    imageStatus.textContent = `✗ Error: ${data.error}`;
+                }
+            } catch (error) {
+                imageStatus.textContent = `✗ Error: ${error.message}`;
+            }
+        }
+
+        async function generateImage() {
+            const prompt = imagePrompt.value.trim();
+            if (!prompt) {
+                imageStatus.textContent = 'Please enter a prompt';
+                return;
+            }
+
+            const [width, height] = imageSize.value.split('x').map(Number);
+            const steps = parseInt(imageSteps.value);
+
+            imageStatus.textContent = 'Generating image...';
+            generateImageBtn.disabled = true;
+            imageResult.innerHTML = '<p style="color: #666;">Generating... This may take 10-30 seconds.</p>';
+
+            try {
+                const params = new URLSearchParams({
+                    prompt: prompt,
+                    width: width,
+                    height: height,
+                    steps: steps,
+                });
+
+                const response = await fetch(`${API_URL}/api/image/generate?${params}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    imageStatus.innerHTML = `<span style="color: #28a745;">✓ Image generated (${data.width}x${data.height})</span>`;
+                    imageResult.innerHTML = `
+                        <img src="data:image/png;base64,${data.image_base64}"
+                             style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);"
+                             alt="${data.prompt}">
+                        <p style="margin-top: 10px; color: #666; font-size: 12px;">${data.prompt}</p>
+                        <a href="data:image/png;base64,${data.image_base64}"
+                           download="generated-image.png"
+                           class="btn"
+                           style="display: inline-block; margin-top: 10px; text-decoration: none;">
+                           Download Image
+                        </a>
+                    `;
+                } else {
+                    imageStatus.textContent = `✗ Error: ${data.error}`;
+                    imageResult.innerHTML = `<p style="color: #dc3545;">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                imageStatus.textContent = `✗ Error: ${error.message}`;
+                imageResult.innerHTML = `<p style="color: #dc3545;">Error: ${error.message}</p>`;
+            }
+
+            generateImageBtn.disabled = false;
         }
     </script>
 </body>

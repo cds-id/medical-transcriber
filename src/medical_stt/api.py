@@ -18,6 +18,7 @@ import uvicorn
 from .config import Config, ModelType
 from .transcriber import MedicalTranscriber
 from .postprocess import TranscriptionPostProcessor
+from . import image_gen
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -506,6 +507,116 @@ def _check_ollama_running() -> bool:
         return result.returncode == 0
     except:
         return False
+
+
+# ============== Image Generation Endpoints ==============
+
+@app.post("/api/image/load")
+async def load_image_model():
+    """
+    Load FLUX.1 Schnell model for image generation.
+
+    IMPORTANT: Call /api/unload first to free GPU memory!
+    """
+    try:
+        if image_gen.is_loaded():
+            return JSONResponse(content={
+                "success": True,
+                "message": "FLUX model already loaded",
+                "memory": image_gen.get_memory_usage(),
+            })
+
+        image_gen.load_model()
+
+        return JSONResponse(content={
+            "success": True,
+            "message": "FLUX.1 Schnell loaded successfully",
+            "memory": image_gen.get_memory_usage(),
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
+
+
+@app.post("/api/image/unload")
+async def unload_image_model():
+    """Unload FLUX model to free GPU memory."""
+    try:
+        unloaded = image_gen.unload_model()
+        return JSONResponse(content={
+            "success": True,
+            "unloaded": unloaded,
+            "message": "FLUX model unloaded" if unloaded else "FLUX model was not loaded",
+            "memory": image_gen.get_memory_usage(),
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
+
+
+@app.post("/api/image/generate")
+async def generate_image(
+    prompt: str = Query(..., description="Text description of the image to generate"),
+    width: int = Query(default=1024, ge=256, le=2048, description="Image width"),
+    height: int = Query(default=1024, ge=256, le=2048, description="Image height"),
+    steps: int = Query(default=4, ge=1, le=50, description="Number of inference steps"),
+    seed: Optional[int] = Query(default=None, description="Random seed for reproducibility"),
+):
+    """
+    Generate an image from a text prompt using FLUX.1 Schnell.
+
+    Returns base64 encoded PNG image.
+    """
+    try:
+        # Auto-load model if not loaded
+        if not image_gen.is_loaded():
+            # Check if Whisper is still loaded
+            if transcriber is not None:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "Please unload Whisper first using /api/unload to free GPU memory",
+                    },
+                )
+            image_gen.load_model()
+
+        result = image_gen.generate_image(
+            prompt=prompt,
+            width=width,
+            height=height,
+            num_inference_steps=steps,
+            seed=seed,
+        )
+
+        return JSONResponse(content={
+            "success": True,
+            "image_base64": result["image_base64"],
+            "width": result["width"],
+            "height": result["height"],
+            "prompt": result["prompt"],
+            "seed": result["seed"],
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
+
+
+@app.get("/api/image/status")
+async def image_model_status():
+    """Check if FLUX model is loaded."""
+    return {
+        "loaded": image_gen.is_loaded(),
+        "model": "FLUX.1 Schnell" if image_gen.is_loaded() else None,
+        "memory": image_gen.get_memory_usage(),
+    }
 
 
 def main():
