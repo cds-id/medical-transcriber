@@ -123,11 +123,20 @@ class HuggingFaceBackend(TranscriberBackend):
 
         logger.info(f"Loading model {self.config.model_id} on {self._device}")
 
-        self._processor = AutoProcessor.from_pretrained(self.config.model_id)
+        # Prepare kwargs for HuggingFace token
+        hf_kwargs = {}
+        if self.config.hf_token:
+            hf_kwargs["token"] = self.config.hf_token
+
+        self._processor = AutoProcessor.from_pretrained(
+            self.config.model_id,
+            **hf_kwargs,
+        )
         self._model = AutoModelForSpeechSeq2Seq.from_pretrained(
             self.config.model_id,
             torch_dtype=torch_dtype,
             low_cpu_mem_usage=True,
+            **hf_kwargs,
         ).to(self._device)
 
         logger.info("Model loaded successfully")

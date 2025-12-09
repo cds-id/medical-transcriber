@@ -15,6 +15,14 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# HuggingFace token (can be set via environment or .env file)
+HF_TOKEN="${HF_TOKEN:-}"
+
+# Load from .env if exists
+if [ -f "$PROJECT_DIR/.env" ]; then
+    source "$PROJECT_DIR/.env"
+fi
+
 # Available models
 MODELS=(
     "ayoubkirouane/whisper-small-medical"
@@ -60,22 +68,32 @@ download_model() {
     local model_id="$1"
     echo ""
     echo -e "${GREEN}Downloading: ${YELLOW}$model_id${NC}"
+    if [ -n "$HF_TOKEN" ]; then
+        echo -e "${GREEN}Using HuggingFace token${NC}"
+    fi
     echo "This may take a while depending on your connection..."
     echo ""
 
     python3 << EOF
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 import torch
+import os
 
 model_id = "$model_id"
+hf_token = os.environ.get("HF_TOKEN") or "$HF_TOKEN" or None
+
+# Prepare token kwargs
+token_kwargs = {"token": hf_token} if hf_token else {}
+
 print(f"Downloading processor for {model_id}...")
-processor = AutoProcessor.from_pretrained(model_id)
+processor = AutoProcessor.from_pretrained(model_id, **token_kwargs)
 
 print(f"Downloading model for {model_id}...")
 model = AutoModelForSpeechSeq2Seq.from_pretrained(
     model_id,
     torch_dtype=torch.float32,
     low_cpu_mem_usage=True,
+    **token_kwargs,
 )
 
 print(f"✓ Successfully downloaded {model_id}")

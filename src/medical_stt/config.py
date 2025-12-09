@@ -62,6 +62,7 @@ class Config:
     device: str = "auto"  # "auto", "cpu", "cuda", "mps"
     language: Optional[str] = None  # None for auto-detection
     task: str = "transcribe"  # "transcribe" or "translate"
+    hf_token: Optional[str] = None  # HuggingFace API token for gated models
 
     def __post_init__(self):
         """Post-initialization processing."""
