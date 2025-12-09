@@ -15,6 +15,7 @@ import uvicorn
 
 from .config import Config, ModelType
 from .transcriber import MedicalTranscriber
+from .postprocess import TranscriptionPostProcessor
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -37,6 +38,7 @@ app.add_middleware(
 
 # Global transcriber instance
 transcriber: Optional[MedicalTranscriber] = None
+postprocessor: Optional[TranscriptionPostProcessor] = None
 
 
 def get_transcriber() -> MedicalTranscriber:
@@ -51,6 +53,17 @@ def get_transcriber() -> MedicalTranscriber:
         transcriber = MedicalTranscriber(config=config, use_mock=False)
         transcriber.load_model()
     return transcriber
+
+
+def get_postprocessor(
+    provider: str = "ollama",
+    model: Optional[str] = None,
+) -> TranscriptionPostProcessor:
+    """Get or initialize the post-processor."""
+    global postprocessor
+    if postprocessor is None or postprocessor.provider != provider:
+        postprocessor = TranscriptionPostProcessor(provider=provider, model=model)
+    return postprocessor
 
 
 @app.on_event("startup")
@@ -107,6 +120,9 @@ def convert_to_wav(input_path: str, output_path: str) -> bool:
 async def transcribe_upload(
     file: UploadFile = File(...),
     language: str = Query(default="id", description="Language code (id, en, de, etc.)"),
+    postprocess: bool = Query(default=False, description="Use LLM to fix medical terms"),
+    llm_provider: str = Query(default="ollama", description="LLM provider: ollama, openai, anthropic"),
+    llm_model: Optional[str] = Query(default=None, description="LLM model name (optional)"),
 ):
     """
     Upload audio file and get transcription.
@@ -154,9 +170,28 @@ async def transcribe_upload(
 
         duration = len(audio) / sr
 
+        raw_transcription = result.text
+        final_transcription = raw_transcription
+
+        # Post-process with LLM if requested
+        if postprocess:
+            try:
+                processor = get_postprocessor(provider=llm_provider, model=llm_model)
+                final_transcription = processor.fix_transcription(
+                    raw_transcription,
+                    language=language,
+                    context="medical",
+                )
+            except Exception as e:
+                # Log error but return raw transcription
+                import logging
+                logging.error(f"Post-processing failed: {e}")
+
         return JSONResponse(content={
             "success": True,
-            "transcription": result.text,
+            "transcription": final_transcription,
+            "raw_transcription": raw_transcription if postprocess else None,
+            "postprocessed": postprocess,
             "language": language,
             "duration_seconds": round(duration, 2),
             "filename": file.filename,

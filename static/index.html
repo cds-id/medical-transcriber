@@ -128,6 +128,10 @@
                     <option value="en">English</option>
                     <option value="de">German</option>
                 </select>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="uploadPostprocess">
+                    Fix medical terms (LLM)
+                </label>
             </div>
             <div class="upload-area" id="uploadArea">
                 <p>Drag & drop audio file here or click to select</p>
@@ -147,6 +151,10 @@
                     <option value="en">English</option>
                     <option value="de">German</option>
                 </select>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="streamPostprocess">
+                    Fix medical terms (LLM)
+                </label>
                 <button class="btn btn-record" id="recordBtn">Start Recording</button>
                 <button class="btn" id="transcribeBtn" disabled>Transcribe</button>
             </div>
@@ -165,6 +173,7 @@
         const uploadStatus = document.getElementById('uploadStatus');
         const uploadResult = document.getElementById('uploadResult');
         const uploadLanguage = document.getElementById('uploadLanguage');
+        const uploadPostprocess = document.getElementById('uploadPostprocess');
 
         uploadArea.addEventListener('click', () => fileInput.click());
         uploadArea.addEventListener('dragover', (e) => {
@@ -193,15 +202,21 @@
             formData.append('file', file);
 
             try {
-                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${uploadLanguage.value}`, {
+                const postprocess = uploadPostprocess.checked;
+                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${uploadLanguage.value}&postprocess=${postprocess}`, {
                     method: 'POST',
                     body: formData,
                 });
                 const data = await response.json();
 
                 if (data.success) {
-                    uploadStatus.textContent = `✓ Transcribed ${file.name} (${data.duration_seconds}s)`;
-                    uploadResult.textContent = data.transcription;
+                    const ppLabel = data.postprocessed ? ' [LLM fixed]' : '';
+                    uploadStatus.textContent = `✓ Transcribed ${file.name} (${data.duration_seconds}s)${ppLabel}`;
+                    let resultText = data.transcription;
+                    if (data.raw_transcription && data.raw_transcription !== data.transcription) {
+                        resultText += `\n\n--- Raw transcription ---\n${data.raw_transcription}`;
+                    }
+                    uploadResult.textContent = resultText;
                 } else {
                     uploadStatus.textContent = `✗ Error: ${data.error}`;
                     uploadResult.textContent = 'Error occurred';
@@ -218,6 +233,7 @@
         const streamStatus = document.getElementById('streamStatus');
         const streamResult = document.getElementById('streamResult');
         const streamLanguage = document.getElementById('streamLanguage');
+        const streamPostprocess = document.getElementById('streamPostprocess');
 
         let mediaRecorder = null;
         let audioChunks = [];
@@ -275,15 +291,21 @@
                 const formData = new FormData();
                 formData.append('file', audioBlob, 'recording.webm');
 
-                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${streamLanguage.value}`, {
+                const postprocess = streamPostprocess.checked;
+                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${streamLanguage.value}&postprocess=${postprocess}`, {
                     method: 'POST',
                     body: formData,
                 });
                 const data = await response.json();
 
                 if (data.success) {
-                    streamStatus.textContent = `✓ Transcribed (${data.duration_seconds}s)`;
-                    streamResult.textContent = data.transcription;
+                    const ppLabel = data.postprocessed ? ' [LLM fixed]' : '';
+                    streamStatus.textContent = `✓ Transcribed (${data.duration_seconds}s)${ppLabel}`;
+                    let resultText = data.transcription;
+                    if (data.raw_transcription && data.raw_transcription !== data.transcription) {
+                        resultText += `\n\n--- Raw transcription ---\n${data.raw_transcription}`;
+                    }
+                    streamResult.textContent = resultText;
                 } else {
                     streamStatus.textContent = `✗ Error: ${data.error}`;
                     streamResult.textContent = 'Error occurred';
