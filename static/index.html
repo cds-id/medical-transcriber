@@ -124,6 +124,7 @@
             <h2>📁 Upload Audio File</h2>
             <div class="controls">
                 <select id="uploadLanguage" class="language-select">
+                    <option value="">Auto-detect</option>
                     <option value="id">Indonesian</option>
                     <option value="en">English</option>
                     <option value="de">German</option>
@@ -147,6 +148,7 @@
             <h2>🎤 Record & Stream Audio</h2>
             <div class="controls">
                 <select id="streamLanguage" class="language-select">
+                    <option value="">Auto-detect</option>
                     <option value="id">Indonesian</option>
                     <option value="en">English</option>
                     <option value="de">German</option>
@@ -203,7 +205,9 @@
 
             try {
                 const postprocess = uploadPostprocess.checked;
-                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${uploadLanguage.value}&postprocess=${postprocess}`, {
+                const lang = uploadLanguage.value;
+                const langParam = lang ? `&language=${lang}` : '';
+                const response = await fetch(`${API_URL}/api/transcribe/upload?postprocess=${postprocess}${langParam}`, {
                     method: 'POST',
                     body: formData,
                 });
@@ -211,7 +215,8 @@
 
                 if (data.success) {
                     const ppLabel = data.postprocessed ? ' [LLM fixed]' : '';
-                    uploadStatus.textContent = `✓ Transcribed ${file.name} (${data.duration_seconds}s)${ppLabel}`;
+                    const langLabel = data.language ? ` [${data.language}]` : '';
+                    uploadStatus.textContent = `✓ Transcribed ${file.name} (${data.duration_seconds}s)${langLabel}${ppLabel}`;
                     let resultText = data.transcription;
                     if (data.raw_transcription && data.raw_transcription !== data.transcription) {
                         resultText += `\n\n--- Raw transcription ---\n${data.raw_transcription}`;
@@ -292,7 +297,9 @@
                 formData.append('file', audioBlob, 'recording.webm');
 
                 const postprocess = streamPostprocess.checked;
-                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${streamLanguage.value}&postprocess=${postprocess}`, {
+                const lang = streamLanguage.value;
+                const langParam = lang ? `&language=${lang}` : '';
+                const response = await fetch(`${API_URL}/api/transcribe/upload?postprocess=${postprocess}${langParam}`, {
                     method: 'POST',
                     body: formData,
                 });
@@ -300,7 +307,8 @@
 
                 if (data.success) {
                     const ppLabel = data.postprocessed ? ' [LLM fixed]' : '';
-                    streamStatus.textContent = `✓ Transcribed (${data.duration_seconds}s)${ppLabel}`;
+                    const langLabel = data.language ? ` [${data.language}]` : '';
+                    streamStatus.textContent = `✓ Transcribed (${data.duration_seconds}s)${langLabel}${ppLabel}`;
                     let resultText = data.transcription;
                     if (data.raw_transcription && data.raw_transcription !== data.transcription) {
                         resultText += `\n\n--- Raw transcription ---\n${data.raw_transcription}`;

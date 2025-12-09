@@ -48,7 +48,7 @@ def get_transcriber() -> MedicalTranscriber:
         config = Config(
             model_type=ModelType.WHISPER_LARGE_V3,
             device="auto",
-            language="id",
+            language=None,  # Auto-detect language
         )
         transcriber = MedicalTranscriber(config=config, use_mock=False)
         transcriber.load_model()
@@ -119,7 +119,7 @@ def convert_to_wav(input_path: str, output_path: str) -> bool:
 @app.post("/api/transcribe/upload")
 async def transcribe_upload(
     file: UploadFile = File(...),
-    language: str = Query(default="id", description="Language code (id, en, de, etc.)"),
+    language: Optional[str] = Query(default=None, description="Language code (id, en, de, etc.) or None for auto-detect"),
     postprocess: bool = Query(default=False, description="Use LLM to fix medical terms"),
     llm_provider: str = Query(default="ollama", description="LLM provider: ollama, openai, anthropic"),
     llm_model: Optional[str] = Query(default=None, description="LLM model name (optional)"),
@@ -170,6 +170,9 @@ async def transcribe_upload(
 
         duration = len(audio) / sr
 
+        # Get detected/used language
+        detected_language = result.language or language or "auto"
+
         raw_transcription = result.text
         final_transcription = raw_transcription
 
@@ -177,9 +180,11 @@ async def transcribe_upload(
         if postprocess:
             try:
                 processor = get_postprocessor(provider=llm_provider, model=llm_model)
+                # Use detected language for post-processing, default to "id" if unknown
+                pp_language = detected_language if detected_language != "auto" else "id"
                 final_transcription = processor.fix_transcription(
                     raw_transcription,
-                    language=language,
+                    language=pp_language,
                     context="medical",
                 )
             except Exception as e:
@@ -192,7 +197,7 @@ async def transcribe_upload(
             "transcription": final_transcription,
             "raw_transcription": raw_transcription if postprocess else None,
             "postprocessed": postprocess,
-            "language": language,
+            "language": detected_language,
             "duration_seconds": round(duration, 2),
             "filename": file.filename,
         })

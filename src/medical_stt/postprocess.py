@@ -86,30 +86,61 @@ class TranscriptionPostProcessor:
 
         # Build prompt based on language and context
         if language == "id":
-            system_prompt = """Anda adalah asisten yang memperbaiki hasil transkripsi audio medis dalam Bahasa Indonesia.
+            system_prompt = """Anda adalah asisten medis yang memperbaiki hasil transkripsi audio dalam Bahasa Indonesia.
 
-Tugas Anda:
-1. Perbaiki kesalahan ejaan dan tata bahasa
-2. Perbaiki istilah medis yang salah transkripsi
+TUGAS UTAMA: Perbaiki ejaan nama obat dan istilah medis ke ejaan yang BENAR.
+
+Contoh koreksi nama obat:
+- amoksilin → Amoxicillin
+- amoksisilin → Amoxicillin
+- karsetamol → Paracetamol
+- paracetamol → Paracetamol
+- persetamo → Paracetamol
+- parasetamol → Paracetamol
+- ibuprofen → Ibuprofen
+- aspirin → Aspirin
+- metformin → Metformin
+- omeprazol → Omeprazole
+- amlodipin → Amlodipine
+- simvastatin → Simvastatin
+- captopril → Captopril
+- ciprofloksasin → Ciprofloxacin
+- deksametason → Dexamethasone
+- prednison → Prednisone
+- cetirizin → Cetirizine
+- loratadin → Loratadine
+- ranitidin → Ranitidine
+- lansoprazol → Lansoprazole
+
+Aturan:
+1. Perbaiki ejaan nama obat ke ejaan internasional yang benar
+2. Hapus pengulangan kata yang tidak perlu (contoh: "tes-tes-tes" → "tes")
 3. Tambahkan tanda baca yang tepat
-4. Pertahankan makna asli, jangan tambah atau kurangi informasi
-5. Format paragraf dengan baik
+4. Pertahankan makna asli
 
 Balas HANYA dengan teks yang sudah diperbaiki, tanpa penjelasan."""
 
         else:
-            system_prompt = """You are an assistant that fixes medical audio transcription errors.
+            system_prompt = """You are a medical assistant that fixes audio transcription errors.
 
-Your tasks:
-1. Fix spelling and grammar errors
-2. Correct medical terminology that was mistranscribed
+MAIN TASK: Correct drug names and medical terms to their PROPER spelling.
+
+Examples of drug name corrections:
+- amoxicilin → Amoxicillin
+- paracetamol → Paracetamol
+- ibuprofen → Ibuprofen
+- metformin → Metformin
+- omeprazole → Omeprazole
+
+Rules:
+1. Fix drug names to correct international spelling
+2. Remove unnecessary word repetitions (e.g., "test-test-test" → "test")
 3. Add proper punctuation
-4. Preserve the original meaning, don't add or remove information
-5. Format paragraphs properly
+4. Preserve original meaning
 
 Reply ONLY with the corrected text, no explanations."""
 
-        user_prompt = f"Fix this transcription:\n\n{text}"
+        user_prompt = f"Perbaiki transkripsi ini:\n\n{text}"
 
         try:
             client = self._get_client()
@@ -121,6 +152,9 @@ Reply ONLY with the corrected text, no explanations."""
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
+                    options={
+                        "temperature": 0.1,  # Low temperature for consistent corrections
+                    },
                 )
                 return response["message"]["content"].strip()
 
