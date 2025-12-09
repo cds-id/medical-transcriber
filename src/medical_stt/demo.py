@@ -16,9 +16,24 @@ def run_demo():
     print("=" * 50)
     print()
 
-    # Use whisper-large-v3
-    model_type = ModelType.WHISPER_LARGE_V3
+    # Parse model argument
+    model_map = {
+        "whisper": ModelType.WHISPER_LARGE_V3,
+        "nusa": ModelType.NUSA_STT_ID,
+    }
+
+    # Check for model argument (first arg if not a file)
+    model_key = "whisper"  # default
+    audio_arg_index = 1
+
+    if len(sys.argv) > 1 and sys.argv[1] in model_map:
+        model_key = sys.argv[1]
+        audio_arg_index = 2
+
+    model_type = model_map[model_key]
+
     print(f"Model: {model_type.value}")
+    print(f"Available models: {', '.join(model_map.keys())}")
     print()
 
     # Create config (Indonesian language)
@@ -47,19 +62,21 @@ def run_demo():
         sys.exit(1)
 
     # Generate test audio (or load from file if provided)
-    if len(sys.argv) > 2:
-        audio_file = sys.argv[2]
+    import os
+    audio_file = None
+
+    # Check if audio file is provided as argument
+    if len(sys.argv) > audio_arg_index:
+        audio_file = sys.argv[audio_arg_index]
     else:
-        # Check for default test file
-        import os
-        default_files = ["tests.wav", "test.wav", "samples/sample_english.wav"]
-        audio_file = None
+        # Check for default test files
+        default_files = ["tests.wav", "test.wav", "output.wav", "samples/sample_english.wav"]
         for f in default_files:
             if os.path.exists(f):
                 audio_file = f
                 break
 
-    if audio_file:
+    if audio_file and os.path.exists(audio_file):
         print(f"Loading audio from: {audio_file}")
         from .audio_utils import load_audio_file
         audio, sr = load_audio_file(audio_file, target_sr=config.audio.sample_rate)
@@ -67,7 +84,9 @@ def run_demo():
         print(f"Audio duration: {duration:.1f} seconds")
     else:
         print("Using generated test audio (silence - for real test, provide audio file)")
+        print()
         print("Usage: python -m src.medical_stt.demo [model] [audio_file.wav]")
+        print("  model: whisper (default), nusa")
         print()
         # Generate 3 seconds of test audio
         audio = generate_test_audio(duration_seconds=3.0)
