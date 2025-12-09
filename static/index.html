@@ -507,6 +507,9 @@
         const imageStatus = document.getElementById('imageStatus');
         const imageResult = document.getElementById('imageResult');
 
+        // Image cache
+        let generatedImages = [];
+
         loadFluxBtn.addEventListener('click', loadFluxModel);
         unloadFluxBtn.addEventListener('click', unloadFluxModel);
         generateImageBtn.addEventListener('click', generateImage);
@@ -579,19 +582,20 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Add to cache
+                    const imageData = {
+                        base64: data.image_base64,
+                        prompt: data.prompt,
+                        width: data.width,
+                        height: data.height,
+                        seed: data.seed,
+                        timestamp: new Date().toLocaleTimeString()
+                    };
+                    generatedImages.unshift(imageData);
+                    if (generatedImages.length > 10) generatedImages.pop(); // Keep last 10
+
                     imageStatus.innerHTML = `<span style="color: #28a745;">✓ Image generated (${data.width}x${data.height})</span>`;
-                    imageResult.innerHTML = `
-                        <img src="data:image/png;base64,${data.image_base64}"
-                             style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);"
-                             alt="${data.prompt}">
-                        <p style="margin-top: 10px; color: #666; font-size: 12px;">${data.prompt}</p>
-                        <a href="data:image/png;base64,${data.image_base64}"
-                           download="generated-image.png"
-                           class="btn"
-                           style="display: inline-block; margin-top: 10px; text-decoration: none;">
-                           Download Image
-                        </a>
-                    `;
+                    renderImageGallery();
                 } else {
                     imageStatus.textContent = `✗ Error: ${data.error}`;
                     imageResult.innerHTML = `<p style="color: #dc3545;">Error: ${data.error}</p>`;
@@ -602,6 +606,67 @@
             }
 
             generateImageBtn.disabled = false;
+        }
+
+        function renderImageGallery() {
+            if (generatedImages.length === 0) {
+                imageResult.innerHTML = '<p style="color: #999;">Generated image will appear here...</p>';
+                return;
+            }
+
+            let html = '<div class="image-gallery" style="display: flex; flex-direction: column; gap: 20px;">';
+
+            generatedImages.forEach((img, index) => {
+                html += `
+                    <div class="gallery-item" style="border: 1px solid #ddd; border-radius: 10px; padding: 15px; background: white;">
+                        <img src="data:image/png;base64,${img.base64}"
+                             style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);"
+                             alt="${img.prompt}">
+                        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                            <p style="margin: 5px 0;"><strong>Prompt:</strong> ${img.prompt}</p>
+                            <p style="margin: 5px 0;"><strong>Size:</strong> ${img.width}x${img.height} | <strong>Time:</strong> ${img.timestamp}</p>
+                        </div>
+                        <div style="margin-top: 10px; display: flex; gap: 10px;">
+                            <a href="data:image/png;base64,${img.base64}"
+                               download="image-${index + 1}.png"
+                               class="btn"
+                               style="display: inline-block; text-decoration: none; font-size: 12px; padding: 8px 16px;">
+                               Download
+                            </a>
+                            <button class="btn" onclick="deleteImage(${index})"
+                                    style="background: #dc3545; font-size: 12px; padding: 8px 16px;">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            if (generatedImages.length > 1) {
+                html += `
+                    <div style="margin-top: 15px; text-align: center;">
+                        <button class="btn" onclick="clearAllImages()" style="background: #6c757d;">
+                            Clear All (${generatedImages.length} images)
+                        </button>
+                    </div>
+                `;
+            }
+
+            imageResult.innerHTML = html;
+        }
+
+        function deleteImage(index) {
+            generatedImages.splice(index, 1);
+            renderImageGallery();
+        }
+
+        function clearAllImages() {
+            if (confirm('Clear all generated images?')) {
+                generatedImages = [];
+                renderImageGallery();
+            }
         }
     </script>
 </body>
