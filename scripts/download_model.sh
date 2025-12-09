@@ -26,7 +26,9 @@ fi
 # Available models
 MODELS=(
     "openai/whisper-large-v3"
-    "nusa-id/tts-16bit"
+    "openai/whisper-large-v3-turbo"
+    "openai/whisper-medium"
+    "openai/whisper-small"
 )
 
 print_header() {
@@ -40,9 +42,11 @@ print_header() {
 print_models() {
     echo -e "${YELLOW}Available models:${NC}"
     echo ""
-    echo "  1) openai/whisper-large-v3      (~3GB)    - OpenAI Whisper Large V3"
-    echo "  2) nusa-id/tts-16bit            (~)       - Nusa Indonesian STT"
-    echo "  3) all                                    - Download all models"
+    echo "  1) openai/whisper-large-v3       (~3GB)   - Best accuracy"
+    echo "  2) openai/whisper-large-v3-turbo (~1.6GB) - Fast & accurate"
+    echo "  3) openai/whisper-medium         (~1.5GB) - Balanced"
+    echo "  4) openai/whisper-small          (~500MB) - Fastest"
+    echo "  5) all                                    - Download all models"
     echo ""
 }
 
@@ -107,7 +111,7 @@ main() {
         choice="$1"
     else
         print_models
-        read -p "Select model to download (1-3): " choice
+        read -p "Select model to download (1-5): " choice
     fi
 
     case $choice in
@@ -117,7 +121,13 @@ main() {
         2)
             download_model "${MODELS[1]}"
             ;;
-        3|all)
+        3)
+            download_model "${MODELS[2]}"
+            ;;
+        4)
+            download_model "${MODELS[3]}"
+            ;;
+        5|all)
             for model in "${MODELS[@]}"; do
                 download_model "$model"
             done

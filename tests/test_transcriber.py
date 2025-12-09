@@ -276,6 +276,22 @@ class TestMedicalTranscriberPresets:
         assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V3
         assert transcriber.config.language == "id"
 
+    def test_turbo_config(self):
+        """Test turbo configuration."""
+        config = Config.for_turbo()
+        transcriber = MedicalTranscriber(config=config, use_mock=True)
+
+        assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V3_TURBO
+        assert transcriber.config.language == "id"
+
+    def test_fast_config(self):
+        """Test fast configuration."""
+        config = Config.for_fast()
+        transcriber = MedicalTranscriber(config=config, use_mock=True)
+
+        assert transcriber.config.model_type == ModelType.WHISPER_SMALL
+        assert transcriber.config.language == "id"
+
     def test_medical_config(self):
         """Test medical configuration."""
         config = Config.for_medical()

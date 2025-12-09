@@ -136,6 +136,18 @@ class TestConfig:
         assert config.model_type == ModelType.WHISPER_LARGE_V3
         assert config.language == "id"
 
+    def test_for_turbo(self):
+        """Test turbo preset."""
+        config = Config.for_turbo()
+        assert config.model_type == ModelType.WHISPER_LARGE_V3_TURBO
+        assert config.language == "id"
+
+    def test_for_fast(self):
+        """Test fast preset."""
+        config = Config.for_fast()
+        assert config.model_type == ModelType.WHISPER_SMALL
+        assert config.language == "id"
+
     def test_for_medical(self):
         """Test medical preset."""
         config = Config.for_medical()

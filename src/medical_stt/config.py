@@ -9,7 +9,9 @@ class ModelType(Enum):
     """Available Whisper models."""
 
     WHISPER_LARGE_V3 = "openai/whisper-large-v3"
-    NUSA_STT_ID = "nusa-id/tts-16bit"
+    WHISPER_LARGE_V3_TURBO = "openai/whisper-large-v3-turbo"
+    WHISPER_MEDIUM = "openai/whisper-medium"
+    WHISPER_SMALL = "openai/whisper-small"
 
     @classmethod
     def get_default(cls) -> "ModelType":
@@ -117,10 +119,18 @@ class Config:
         )
 
     @classmethod
-    def for_nusa_id(cls) -> "Config":
-        """Create config for Nusa Indonesian STT."""
+    def for_turbo(cls) -> "Config":
+        """Create config for faster transcription with turbo model."""
         return cls(
-            model_type=ModelType.NUSA_STT_ID,
+            model_type=ModelType.WHISPER_LARGE_V3_TURBO,
+            language="id",
+        )
+
+    @classmethod
+    def for_fast(cls) -> "Config":
+        """Create config for fast transcription (smaller model)."""
+        return cls(
+            model_type=ModelType.WHISPER_SMALL,
             language="id",
         )
 

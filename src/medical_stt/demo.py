@@ -18,12 +18,14 @@ def run_demo():
 
     # Parse model argument
     model_map = {
-        "whisper": ModelType.WHISPER_LARGE_V3,
-        "nusa": ModelType.NUSA_STT_ID,
+        "large": ModelType.WHISPER_LARGE_V3,
+        "turbo": ModelType.WHISPER_LARGE_V3_TURBO,
+        "medium": ModelType.WHISPER_MEDIUM,
+        "small": ModelType.WHISPER_SMALL,
     }
 
     # Check for model argument (first arg if not a file)
-    model_key = "whisper"  # default
+    model_key = "large"  # default
     audio_arg_index = 1
 
     if len(sys.argv) > 1 and sys.argv[1] in model_map:
@@ -86,7 +88,7 @@ def run_demo():
         print("Using generated test audio (silence - for real test, provide audio file)")
         print()
         print("Usage: python -m src.medical_stt.demo [model] [audio_file.wav]")
-        print("  model: whisper (default), nusa")
+        print("  model: large (default), turbo, medium, small")
         print()
         # Generate 3 seconds of test audio
         audio = generate_test_audio(duration_seconds=3.0)
