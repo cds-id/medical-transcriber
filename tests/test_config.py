@@ -9,24 +9,22 @@ class TestModelType:
 
     def test_model_values(self):
         """Test model type values."""
-        assert ModelType.WHISPER_LARGE_V3_GERMAN_MEDICAL.value == "primeLine/whisper-large-v3-german-medical"
-        assert ModelType.WHISPER_SMALL_MEDICAL.value == "ayoubkirouane/whisper-small-medical"
-        assert ModelType.WHISPER_LARGE_V2_MEDICAL.value == "MohamedRashad/whisper-large-v2-medical"
+        assert ModelType.WHISPER_LARGE_V3.value == "openai/whisper-large-v3"
 
     def test_get_default(self):
         """Test default model."""
         default = ModelType.get_default()
-        assert default == ModelType.WHISPER_SMALL_MEDICAL
+        assert default == ModelType.WHISPER_LARGE_V3
 
     def test_from_string_by_value(self):
         """Test creating from string value."""
-        model = ModelType.from_string("ayoubkirouane/whisper-small-medical")
-        assert model == ModelType.WHISPER_SMALL_MEDICAL
+        model = ModelType.from_string("openai/whisper-large-v3")
+        assert model == ModelType.WHISPER_LARGE_V3
 
     def test_from_string_by_name(self):
         """Test creating from enum name."""
-        model = ModelType.from_string("WHISPER_SMALL_MEDICAL")
-        assert model == ModelType.WHISPER_SMALL_MEDICAL
+        model = ModelType.from_string("WHISPER_LARGE_V3")
+        assert model == ModelType.WHISPER_LARGE_V3
 
     def test_from_string_invalid(self):
         """Test error on invalid model string."""
@@ -95,20 +93,20 @@ class TestConfig:
     def test_defaults(self):
         """Test default configuration."""
         config = Config()
-        assert config.model_type == ModelType.WHISPER_SMALL_MEDICAL
+        assert config.model_type == ModelType.WHISPER_LARGE_V3
         assert config.device == "auto"
         assert config.language is None
         assert config.task == "transcribe"
 
     def test_model_id_property(self):
         """Test model_id property."""
-        config = Config(model_type=ModelType.WHISPER_LARGE_V2_MEDICAL)
-        assert config.model_id == "MohamedRashad/whisper-large-v2-medical"
+        config = Config(model_type=ModelType.WHISPER_LARGE_V3)
+        assert config.model_id == "openai/whisper-large-v3"
 
     def test_post_init_string_conversion(self):
         """Test string to enum conversion in post_init."""
-        config = Config(model_type="WHISPER_SMALL_MEDICAL")
-        assert config.model_type == ModelType.WHISPER_SMALL_MEDICAL
+        config = Config(model_type="WHISPER_LARGE_V3")
+        assert config.model_type == ModelType.WHISPER_LARGE_V3
 
     def test_post_init_dict_conversion(self):
         """Test dict to dataclass conversion."""
@@ -120,23 +118,29 @@ class TestConfig:
         assert config.audio.channels == 2
         assert config.streaming.buffer_size_seconds == 10.0
 
-    def test_for_german_medical(self):
-        """Test German medical preset."""
-        config = Config.for_german_medical()
-        assert config.model_type == ModelType.WHISPER_LARGE_V3_GERMAN_MEDICAL
+    def test_for_german(self):
+        """Test German preset."""
+        config = Config.for_german()
+        assert config.model_type == ModelType.WHISPER_LARGE_V3
         assert config.language == "de"
 
-    def test_for_english_medical(self):
-        """Test English medical preset."""
-        config = Config.for_english_medical()
-        assert config.model_type == ModelType.WHISPER_LARGE_V2_MEDICAL
+    def test_for_english(self):
+        """Test English preset."""
+        config = Config.for_english()
+        assert config.model_type == ModelType.WHISPER_LARGE_V3
         assert config.language == "en"
 
-    def test_for_lightweight(self):
-        """Test lightweight preset."""
-        config = Config.for_lightweight()
-        assert config.model_type == ModelType.WHISPER_SMALL_MEDICAL
-        assert config.streaming.buffer_size_seconds == 3.0
+    def test_for_indonesian(self):
+        """Test Indonesian preset."""
+        config = Config.for_indonesian()
+        assert config.model_type == ModelType.WHISPER_LARGE_V3
+        assert config.language == "id"
+
+    def test_for_medical(self):
+        """Test medical preset."""
+        config = Config.for_medical()
+        assert config.model_type == ModelType.WHISPER_LARGE_V3
+        assert config.language == "id"  # Default Indonesian
 
     def test_get_device_explicit(self):
         """Test explicit device setting."""

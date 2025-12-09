@@ -252,26 +252,34 @@ class TestMedicalTranscriber:
 class TestMedicalTranscriberPresets:
     """Tests for transcriber preset configurations."""
 
-    def test_german_medical_config(self):
-        """Test German medical configuration."""
-        config = Config.for_german_medical()
+    def test_german_config(self):
+        """Test German configuration."""
+        config = Config.for_german()
         transcriber = MedicalTranscriber(config=config, use_mock=True)
 
-        assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V3_GERMAN_MEDICAL
+        assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V3
         assert transcriber.config.language == "de"
 
-    def test_english_medical_config(self):
-        """Test English medical configuration."""
-        config = Config.for_english_medical()
+    def test_english_config(self):
+        """Test English configuration."""
+        config = Config.for_english()
         transcriber = MedicalTranscriber(config=config, use_mock=True)
 
-        assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V2_MEDICAL
+        assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V3
         assert transcriber.config.language == "en"
 
-    def test_lightweight_config(self):
-        """Test lightweight configuration."""
-        config = Config.for_lightweight()
+    def test_indonesian_config(self):
+        """Test Indonesian configuration."""
+        config = Config.for_indonesian()
         transcriber = MedicalTranscriber(config=config, use_mock=True)
 
-        assert transcriber.config.model_type == ModelType.WHISPER_SMALL_MEDICAL
-        assert transcriber.config.streaming.buffer_size_seconds == 3.0
+        assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V3
+        assert transcriber.config.language == "id"
+
+    def test_medical_config(self):
+        """Test medical configuration."""
+        config = Config.for_medical()
+        transcriber = MedicalTranscriber(config=config, use_mock=True)
+
+        assert transcriber.config.model_type == ModelType.WHISPER_LARGE_V3
+        assert transcriber.config.language == "id"

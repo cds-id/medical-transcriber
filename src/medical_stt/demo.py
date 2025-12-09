@@ -16,28 +16,16 @@ def run_demo():
     print("=" * 50)
     print()
 
-    # Check for model argument
-    model_map = {
-        "small": ModelType.WHISPER_SMALL_MEDICAL,
-        "large-en": ModelType.WHISPER_LARGE_V2_MEDICAL,
-        "large-de": ModelType.WHISPER_LARGE_V3_GERMAN_MEDICAL,
-    }
-
-    model_key = sys.argv[1] if len(sys.argv) > 1 else "small"
-
-    if model_key not in model_map:
-        print(f"Unknown model: {model_key}")
-        print(f"Available: {', '.join(model_map.keys())}")
-        sys.exit(1)
-
-    model_type = model_map[model_key]
+    # Use whisper-large-v3
+    model_type = ModelType.WHISPER_LARGE_V3
     print(f"Model: {model_type.value}")
     print()
 
-    # Create config
+    # Create config (Indonesian language)
     config = Config(
         model_type=model_type,
         device="auto",
+        language="id",  # Indonesian
     )
 
     print(f"Device: {config.get_device()}")

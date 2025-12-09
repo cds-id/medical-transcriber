@@ -42,11 +42,11 @@ def streaming_config():
 def default_config(audio_config, streaming_config):
     """Default configuration."""
     return Config(
-        model_type=ModelType.WHISPER_SMALL_MEDICAL,
+        model_type=ModelType.WHISPER_LARGE_V3,
         audio=audio_config,
         streaming=streaming_config,
         device="cpu",
-        language="en",
+        language="id",
     )
 
 

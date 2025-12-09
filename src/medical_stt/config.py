@@ -6,16 +6,14 @@ from typing import Optional
 
 
 class ModelType(Enum):
-    """Available medical Whisper models."""
+    """Available Whisper models."""
 
-    WHISPER_LARGE_V3_GERMAN_MEDICAL = "primeLine/whisper-large-v3-german-medical"
-    WHISPER_SMALL_MEDICAL = "ayoubkirouane/whisper-small-medical"
-    WHISPER_LARGE_V2_MEDICAL = "MohamedRashad/whisper-large-v2-medical"
+    WHISPER_LARGE_V3 = "openai/whisper-large-v3"
 
     @classmethod
     def get_default(cls) -> "ModelType":
         """Get the default model."""
-        return cls.WHISPER_SMALL_MEDICAL
+        return cls.WHISPER_LARGE_V3
 
     @classmethod
     def from_string(cls, value: str) -> "ModelType":
@@ -94,26 +92,33 @@ class Config:
         return "cpu"
 
     @classmethod
-    def for_german_medical(cls) -> "Config":
-        """Create config optimized for German medical transcription."""
+    def for_german(cls) -> "Config":
+        """Create config for German transcription."""
         return cls(
-            model_type=ModelType.WHISPER_LARGE_V3_GERMAN_MEDICAL,
+            model_type=ModelType.WHISPER_LARGE_V3,
             language="de",
         )
 
     @classmethod
-    def for_english_medical(cls) -> "Config":
-        """Create config optimized for English medical transcription."""
+    def for_english(cls) -> "Config":
+        """Create config for English transcription."""
         return cls(
-            model_type=ModelType.WHISPER_LARGE_V2_MEDICAL,
+            model_type=ModelType.WHISPER_LARGE_V3,
             language="en",
         )
 
     @classmethod
-    def for_lightweight(cls) -> "Config":
-        """Create config for lightweight/fast transcription."""
+    def for_indonesian(cls) -> "Config":
+        """Create config for Indonesian transcription."""
         return cls(
-            model_type=ModelType.WHISPER_SMALL_MEDICAL,
-            audio=AudioConfig(chunk_duration_ms=500),
-            streaming=StreamingConfig(buffer_size_seconds=3.0),
+            model_type=ModelType.WHISPER_LARGE_V3,
+            language="id",
+        )
+
+    @classmethod
+    def for_medical(cls, language: str = "id") -> "Config":
+        """Create config optimized for medical transcription."""
+        return cls(
+            model_type=ModelType.WHISPER_LARGE_V3,
+            language=language,
         )

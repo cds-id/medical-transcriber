@@ -25,9 +25,7 @@ fi
 
 # Available models
 MODELS=(
-    "ayoubkirouane/whisper-small-medical"
-    "MohamedRashad/whisper-large-v2-medical"
-    "primeLine/whisper-large-v3-german-medical"
+    "openai/whisper-large-v3"
 )
 
 print_header() {
@@ -41,10 +39,7 @@ print_header() {
 print_models() {
     echo -e "${YELLOW}Available models:${NC}"
     echo ""
-    echo "  1) whisper-small-medical        (~500MB)  - Fast, lightweight"
-    echo "  2) whisper-large-v2-medical     (~3GB)    - English medical"
-    echo "  3) whisper-large-v3-german      (~3GB)    - German medical"
-    echo "  4) all                          (~6.5GB)  - Download all models"
+    echo "  1) openai/whisper-large-v3      (~3GB)    - OpenAI Whisper Large V3"
     echo ""
 }
 
@@ -105,33 +100,9 @@ main() {
     activate_venv
     install_dependencies
 
-    if [ -n "$1" ]; then
-        choice="$1"
-    else
-        print_models
-        read -p "Select model to download (1-4): " choice
-    fi
-
-    case $choice in
-        1)
-            download_model "${MODELS[0]}"
-            ;;
-        2)
-            download_model "${MODELS[1]}"
-            ;;
-        3)
-            download_model "${MODELS[2]}"
-            ;;
-        4|all)
-            for model in "${MODELS[@]}"; do
-                download_model "$model"
-            done
-            ;;
-        *)
-            echo -e "${RED}Invalid selection${NC}"
-            exit 1
-            ;;
-    esac
+    print_models
+    echo -e "${GREEN}Downloading openai/whisper-large-v3...${NC}"
+    download_model "${MODELS[0]}"
 
     echo ""
     echo -e "${GREEN}========================================"

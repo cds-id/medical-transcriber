@@ -1,22 +1,20 @@
 # Medical Speech-to-Text (STT) Streaming
 
-A proof-of-concept for streaming speech-to-text transcription optimized for medical terminology using HuggingFace Whisper models.
+A proof-of-concept for streaming speech-to-text transcription optimized for medical terminology using OpenAI Whisper Large V3.
 
 ## Features
 
 - **Streaming transcription** - Real-time audio processing with sync and async support
-- **Medical-optimized models** - Pre-configured for medical terminology recognition
-- **Multiple model support** - Choose between speed and accuracy
+- **OpenAI Whisper Large V3** - State-of-the-art speech recognition
+- **Indonesian language support** - Optimized for Indonesian medical transcription
 - **Microphone streaming** - Live transcription from microphone input
 - **Mock backend** - Test without downloading models
 
-## Supported Models
+## Model
 
-| Model | Size | Language | Use Case |
-|-------|------|----------|----------|
-| `ayoubkirouane/whisper-small-medical` | ~500MB | Multi | Fast, lightweight |
-| `MohamedRashad/whisper-large-v2-medical` | ~3GB | English | High accuracy |
-| `primeLine/whisper-large-v3-german-medical` | ~3GB | German | German medical |
+| Model | Size | Description |
+|-------|------|-------------|
+| `openai/whisper-large-v3` | ~3GB | OpenAI Whisper Large V3 - Best accuracy |
 
 ## Installation
 
@@ -33,17 +31,15 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Download Models
+## Download Model
 
 ```bash
-# Interactive model selection
+# Download whisper-large-v3
 ./scripts/download_model.sh
 
-# Or download specific model
-./scripts/download_model.sh 1  # small (fast)
-./scripts/download_model.sh 2  # large-v2 (English)
-./scripts/download_model.sh 3  # large-v3 (German)
-./scripts/download_model.sh 4  # all models
+# With HuggingFace token (for gated models)
+export HF_TOKEN=hf_xxxxxxxxxxxx
+./scripts/download_model.sh
 ```
 
 ## Usage
@@ -56,10 +52,10 @@ pip install -r requirements.txt
 
 # Or manually
 source venv/bin/activate
-python -m src.medical_stt.demo small
+python -m src.medical_stt.demo
 
 # With specific audio file
-python -m src.medical_stt.demo small /path/to/audio.wav
+python -m src.medical_stt.demo audio_file.wav
 ```
 
 ### Microphone Streaming
@@ -67,9 +63,9 @@ python -m src.medical_stt.demo small /path/to/audio.wav
 ```bash
 ./scripts/run.sh mic
 
-# Or with specific model
+# Or manually
 source venv/bin/activate
-python -m src.medical_stt.mic_stream small
+python -m src.medical_stt.mic_stream
 ```
 
 ### Python API
@@ -77,17 +73,18 @@ python -m src.medical_stt.mic_stream small
 ```python
 from src.medical_stt import MedicalTranscriber, Config, ModelType
 
-# Create configuration
+# Create configuration (Indonesian by default)
 config = Config(
-    model_type=ModelType.WHISPER_SMALL_MEDICAL,
+    model_type=ModelType.WHISPER_LARGE_V3,
     device="auto",  # auto, cpu, cuda, mps
-    language="en",
+    language="id",  # Indonesian
 )
 
 # Or use presets
-config = Config.for_english_medical()  # Large v2
-config = Config.for_german_medical()   # Large v3 German
-config = Config.for_lightweight()      # Small, fast
+config = Config.for_indonesian()  # Indonesian
+config = Config.for_english()     # English
+config = Config.for_german()      # German
+config = Config.for_medical()     # Medical (Indonesian default)
 
 # Initialize transcriber
 transcriber = MedicalTranscriber(config=config)
@@ -106,7 +103,7 @@ print(result.text)
 import numpy as np
 from src.medical_stt import MedicalTranscriber, Config
 
-config = Config.for_lightweight()
+config = Config.for_indonesian()
 transcriber = MedicalTranscriber(config=config)
 transcriber.load_model()
 
@@ -128,7 +125,7 @@ from src.medical_stt import MedicalTranscriber, Config
 from src.medical_stt.streaming import AsyncStreamingSession
 
 async def main():
-    config = Config.for_lightweight()
+    config = Config.for_indonesian()
     transcriber = MedicalTranscriber(config=config)
     transcriber.load_model()
 
@@ -144,6 +141,20 @@ async def main():
     await session.stop()
 
 asyncio.run(main())
+```
+
+### With HuggingFace Token
+
+```python
+from src.medical_stt import MedicalTranscriber, Config
+
+config = Config(
+    hf_token="hf_xxxxxxxxxxxx",  # For gated models
+    language="id",
+)
+
+transcriber = MedicalTranscriber(config=config)
+transcriber.load_model()
 ```
 
 ## Testing
@@ -191,6 +202,15 @@ medical-analytics/
 
 ## Configuration Options
 
+### Config
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `model_type` | WHISPER_LARGE_V3 | Model to use |
+| `device` | auto | Device (auto, cpu, cuda, mps) |
+| `language` | None | Language code (id, en, de, etc.) |
+| `hf_token` | None | HuggingFace API token |
+
 ### AudioConfig
 
 | Parameter | Default | Description |
@@ -208,6 +228,14 @@ medical-analytics/
 | `min_audio_length_seconds` | 0.5 | Minimum audio to process |
 | `vad_enabled` | True | Voice Activity Detection |
 
+## Supported Languages
+
+Whisper Large V3 supports 99+ languages including:
+- Indonesian (id)
+- English (en)
+- German (de)
+- And many more...
+
 ## Requirements
 
 - Python 3.9+
@@ -222,9 +250,5 @@ MIT
 
 ## Acknowledgments
 
-- [HuggingFace Transformers](https://huggingface.co/transformers/)
 - [OpenAI Whisper](https://github.com/openai/whisper)
-- Medical model fine-tuners:
-  - [ayoubkirouane](https://huggingface.co/ayoubkirouane)
-  - [MohamedRashad](https://huggingface.co/MohamedRashad)
-  - [primeLine](https://huggingface.co/primeLine)
+- [HuggingFace Transformers](https://huggingface.co/transformers/)

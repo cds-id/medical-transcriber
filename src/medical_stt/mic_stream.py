@@ -17,23 +17,15 @@ def run_mic_stream():
     print("=" * 50)
     print()
 
-    # Parse model argument
-    model_map = {
-        "small": ModelType.WHISPER_SMALL_MEDICAL,
-        "large-en": ModelType.WHISPER_LARGE_V2_MEDICAL,
-        "large-de": ModelType.WHISPER_LARGE_V3_GERMAN_MEDICAL,
-    }
-
-    model_key = sys.argv[1] if len(sys.argv) > 1 else "small"
-    model_type = model_map.get(model_key, ModelType.WHISPER_SMALL_MEDICAL)
-
+    # Use whisper-large-v3
+    model_type = ModelType.WHISPER_LARGE_V3
     print(f"Model: {model_type.value}")
 
-    # Create config
+    # Create config (Indonesian language)
     config = Config(
         model_type=model_type,
         device="auto",
-        language="en",  # Change to "de" for German
+        language="id",  # Indonesian
     )
 
     print(f"Device: {config.get_device()}")
