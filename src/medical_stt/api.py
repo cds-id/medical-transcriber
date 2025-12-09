@@ -3,6 +3,8 @@
 
 import io
 import os
+import gc
+import subprocess
 import tempfile
 import numpy as np
 from typing import Optional
@@ -327,6 +329,183 @@ async def list_models():
         ],
         "current": get_transcriber().config.model_id,
     }
+
+
+@app.post("/api/unload")
+async def unload_models(
+    unload_whisper: bool = Query(default=True, description="Unload Whisper model from GPU"),
+    stop_ollama: bool = Query(default=True, description="Stop Ollama service"),
+):
+    """
+    Unload models to free GPU memory for other tasks (e.g., image generation).
+
+    This will:
+    - Unload Whisper model from GPU memory
+    - Stop Ollama service (optional)
+    - Run garbage collection and clear CUDA cache
+    """
+    global transcriber, postprocessor
+
+    results = {
+        "whisper_unloaded": False,
+        "ollama_stopped": False,
+        "gpu_memory_cleared": False,
+    }
+
+    # Unload Whisper model
+    if unload_whisper and transcriber is not None:
+        try:
+            # Delete the transcriber and its backend
+            del transcriber
+            transcriber = None
+            results["whisper_unloaded"] = True
+        except Exception as e:
+            results["whisper_error"] = str(e)
+
+    # Clear postprocessor
+    if postprocessor is not None:
+        try:
+            del postprocessor
+            postprocessor = None
+        except:
+            pass
+
+    # Stop Ollama service
+    if stop_ollama:
+        try:
+            # Try systemctl first
+            result = subprocess.run(
+                ["sudo", "systemctl", "stop", "ollama"],
+                capture_output=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                results["ollama_stopped"] = True
+            else:
+                # Try pkill as fallback
+                subprocess.run(["pkill", "-f", "ollama"], capture_output=True, timeout=5)
+                results["ollama_stopped"] = True
+        except Exception as e:
+            results["ollama_error"] = str(e)
+
+    # Clear GPU memory
+    try:
+        gc.collect()
+
+        # Clear CUDA cache if available
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                results["gpu_memory_cleared"] = True
+        except ImportError:
+            pass
+    except Exception as e:
+        results["gc_error"] = str(e)
+
+    # Get current GPU memory status
+    try:
+        import torch
+        if torch.cuda.is_available():
+            results["gpu_memory_allocated_mb"] = round(torch.cuda.memory_allocated() / 1024 / 1024, 2)
+            results["gpu_memory_reserved_mb"] = round(torch.cuda.memory_reserved() / 1024 / 1024, 2)
+    except:
+        pass
+
+    return JSONResponse(content={
+        "success": True,
+        "message": "Models unloaded. GPU memory freed for image generation.",
+        "details": results,
+    })
+
+
+@app.post("/api/reload")
+async def reload_models():
+    """
+    Reload Whisper model and restart Ollama after image generation.
+    """
+    results = {
+        "whisper_loaded": False,
+        "ollama_started": False,
+    }
+
+    # Start Ollama service
+    try:
+        # Try systemctl first
+        result = subprocess.run(
+            ["sudo", "systemctl", "start", "ollama"],
+            capture_output=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            results["ollama_started"] = True
+        else:
+            # Try starting ollama directly as fallback
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            results["ollama_started"] = True
+    except Exception as e:
+        results["ollama_error"] = str(e)
+
+    # Reload Whisper model
+    try:
+        get_transcriber()
+        results["whisper_loaded"] = True
+    except Exception as e:
+        results["whisper_error"] = str(e)
+
+    # Get current GPU memory status
+    try:
+        import torch
+        if torch.cuda.is_available():
+            results["gpu_memory_allocated_mb"] = round(torch.cuda.memory_allocated() / 1024 / 1024, 2)
+            results["gpu_memory_reserved_mb"] = round(torch.cuda.memory_reserved() / 1024 / 1024, 2)
+    except:
+        pass
+
+    return JSONResponse(content={
+        "success": True,
+        "message": "Models reloaded. Ready for transcription.",
+        "details": results,
+    })
+
+
+@app.get("/api/gpu/status")
+async def gpu_status():
+    """Get current GPU memory status."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return {
+                "gpu_available": True,
+                "device_name": torch.cuda.get_device_name(0),
+                "memory_allocated_mb": round(torch.cuda.memory_allocated() / 1024 / 1024, 2),
+                "memory_reserved_mb": round(torch.cuda.memory_reserved() / 1024 / 1024, 2),
+                "memory_total_mb": round(torch.cuda.get_device_properties(0).total_memory / 1024 / 1024, 2),
+                "whisper_loaded": transcriber is not None,
+                "ollama_running": _check_ollama_running(),
+            }
+        else:
+            return {"gpu_available": False, "device": "cpu"}
+    except ImportError:
+        return {"gpu_available": False, "error": "torch not installed"}
+
+
+def _check_ollama_running() -> bool:
+    """Check if Ollama is running."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-x", "ollama"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except:
+        return False
 
 
 def main():

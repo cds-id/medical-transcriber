@@ -86,6 +86,35 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+        .btn-unload {
+            background: #fd7e14;
+        }
+        .btn-unload:hover {
+            background: #e67312;
+        }
+        .btn-reload {
+            background: #28a745;
+        }
+        .btn-reload:hover {
+            background: #218838;
+        }
+        .gpu-status {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .gpu-status .status-item {
+            margin: 5px 0;
+        }
+        .gpu-status .status-loaded {
+            color: #28a745;
+        }
+        .gpu-status .status-unloaded {
+            color: #dc3545;
+        }
         .result {
             background: #f8f9fa;
             border-radius: 5px;
@@ -118,6 +147,17 @@
 <body>
     <div class="container">
         <h1>🏥 Medical Speech-to-Text</h1>
+
+        <!-- GPU Status Section -->
+        <div class="card">
+            <h2>🖥️ GPU Status</h2>
+            <div class="controls">
+                <button class="btn" id="refreshGpuBtn">Refresh Status</button>
+                <button class="btn btn-unload" id="unloadBtn">Unload Models (Free GPU)</button>
+                <button class="btn btn-reload" id="reloadBtn">Reload Models</button>
+            </div>
+            <div class="gpu-status" id="gpuStatus">Click "Refresh Status" to check GPU</div>
+        </div>
 
         <!-- Upload Section -->
         <div class="card">
@@ -168,6 +208,103 @@
     <script>
         const API_URL = window.location.origin;
         const WS_URL = `ws://${window.location.host}/api/transcribe/stream`;
+
+        // GPU Status functionality
+        const refreshGpuBtn = document.getElementById('refreshGpuBtn');
+        const unloadBtn = document.getElementById('unloadBtn');
+        const reloadBtn = document.getElementById('reloadBtn');
+        const gpuStatus = document.getElementById('gpuStatus');
+
+        refreshGpuBtn.addEventListener('click', refreshGpuStatus);
+        unloadBtn.addEventListener('click', unloadModels);
+        reloadBtn.addEventListener('click', reloadModels);
+
+        async function refreshGpuStatus() {
+            gpuStatus.textContent = 'Loading...';
+            try {
+                const response = await fetch(`${API_URL}/api/gpu/status`);
+                const data = await response.json();
+
+                if (data.gpu_available) {
+                    const whisperStatus = data.whisper_loaded
+                        ? '<span class="status-loaded">✓ Loaded</span>'
+                        : '<span class="status-unloaded">✗ Unloaded</span>';
+                    const ollamaStatus = data.ollama_running
+                        ? '<span class="status-loaded">✓ Running</span>'
+                        : '<span class="status-unloaded">✗ Stopped</span>';
+
+                    gpuStatus.innerHTML = `
+                        <div class="status-item"><strong>GPU:</strong> ${data.device_name}</div>
+                        <div class="status-item"><strong>Memory Used:</strong> ${data.memory_allocated_mb} MB / ${data.memory_total_mb} MB</div>
+                        <div class="status-item"><strong>Memory Reserved:</strong> ${data.memory_reserved_mb} MB</div>
+                        <div class="status-item"><strong>Whisper Model:</strong> ${whisperStatus}</div>
+                        <div class="status-item"><strong>Ollama:</strong> ${ollamaStatus}</div>
+                    `;
+                } else {
+                    gpuStatus.textContent = 'GPU not available (running on CPU)';
+                }
+            } catch (error) {
+                gpuStatus.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function unloadModels() {
+            if (!confirm('Unload Whisper model and stop Ollama to free GPU memory for image generation?')) {
+                return;
+            }
+
+            gpuStatus.textContent = 'Unloading models...';
+            unloadBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/unload`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    gpuStatus.innerHTML = `
+                        <div class="status-item" style="color: #28a745;"><strong>✓ ${data.message}</strong></div>
+                        <div class="status-item">Whisper unloaded: ${data.details.whisper_unloaded ? 'Yes' : 'No'}</div>
+                        <div class="status-item">Ollama stopped: ${data.details.ollama_stopped ? 'Yes' : 'No'}</div>
+                        <div class="status-item">GPU memory cleared: ${data.details.gpu_memory_cleared ? 'Yes' : 'No'}</div>
+                        ${data.details.gpu_memory_allocated_mb !== undefined ? `<div class="status-item">Memory now: ${data.details.gpu_memory_allocated_mb} MB</div>` : ''}
+                    `;
+                } else {
+                    gpuStatus.textContent = `Error: ${data.error || 'Unknown error'}`;
+                }
+            } catch (error) {
+                gpuStatus.textContent = `Error: ${error.message}`;
+            }
+
+            unloadBtn.disabled = false;
+        }
+
+        async function reloadModels() {
+            gpuStatus.textContent = 'Reloading models...';
+            reloadBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/reload`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    gpuStatus.innerHTML = `
+                        <div class="status-item" style="color: #28a745;"><strong>✓ ${data.message}</strong></div>
+                        <div class="status-item">Whisper loaded: ${data.details.whisper_loaded ? 'Yes' : 'No'}</div>
+                        <div class="status-item">Ollama started: ${data.details.ollama_started ? 'Yes' : 'No'}</div>
+                        ${data.details.gpu_memory_allocated_mb !== undefined ? `<div class="status-item">Memory used: ${data.details.gpu_memory_allocated_mb} MB</div>` : ''}
+                    `;
+                } else {
+                    gpuStatus.textContent = `Error: ${data.error || 'Unknown error'}`;
+                }
+            } catch (error) {
+                gpuStatus.textContent = `Error: ${error.message}`;
+            }
+
+            reloadBtn.disabled = false;
+        }
+
+        // Auto-refresh GPU status on load
+        refreshGpuStatus();
 
         // Upload functionality
         const uploadArea = document.getElementById('uploadArea');
