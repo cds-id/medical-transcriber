@@ -109,13 +109,13 @@ class HuggingFaceBackend(TranscriberBackend):
 
     def __init__(self, config: Config):
         self.config = config
-        self._model = None
-        self._processor = None
+        self._pipe = None
         self._device = None
+        self._torch_dtype = None
 
     def load(self) -> None:
-        """Load the model and processor from HuggingFace."""
-        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+        """Load the model using pipeline for long-form transcription."""
+        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
         import torch
 
         self._device = self.config.get_device()
@@ -128,16 +128,27 @@ class HuggingFaceBackend(TranscriberBackend):
         if self.config.hf_token:
             hf_kwargs["token"] = self.config.hf_token
 
-        self._processor = AutoProcessor.from_pretrained(
-            self.config.model_id,
-            **hf_kwargs,
-        )
-        self._model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        model = AutoModelForSpeechSeq2Seq.from_pretrained(
             self.config.model_id,
             torch_dtype=self._torch_dtype,
             low_cpu_mem_usage=True,
             **hf_kwargs,
         ).to(self._device)
+
+        processor = AutoProcessor.from_pretrained(
+            self.config.model_id,
+            **hf_kwargs,
+        )
+
+        # Use pipeline for automatic chunking of long audio
+        self._pipe = pipeline(
+            "automatic-speech-recognition",
+            model=model,
+            tokenizer=processor.tokenizer,
+            feature_extractor=processor.feature_extractor,
+            torch_dtype=self._torch_dtype,
+            device=self._device,
+        )
 
         logger.info("Model loaded successfully")
 
@@ -151,41 +162,25 @@ class HuggingFaceBackend(TranscriberBackend):
         if not self.is_loaded():
             raise RuntimeError("Model not loaded. Call load() first.")
 
-        import torch
-
-        # Process audio - use return_attention_mask for long audio
-        inputs = self._processor(
-            audio,
-            sampling_rate=sample_rate,
-            return_tensors="pt",
-            return_attention_mask=True,
-        )
-
-        # Ensure input features match model dtype (fix float32/float16 mismatch on CUDA)
-        input_features = inputs.input_features.to(self._device, dtype=self._torch_dtype)
-        attention_mask = inputs.attention_mask.to(self._device) if hasattr(inputs, 'attention_mask') and inputs.attention_mask is not None else None
-
-        # Generate with long-form transcription support
+        # Prepare generate kwargs
         generate_kwargs = {
             "task": self.config.task,
-            "return_timestamps": True,  # Enable long-form transcription
         }
         if language:
             generate_kwargs["language"] = language
-        if attention_mask is not None:
-            generate_kwargs["attention_mask"] = attention_mask
 
-        with torch.no_grad():
-            predicted_ids = self._model.generate(
-                input_features,
-                **generate_kwargs,
-            )
+        # Use pipeline with chunking for long audio
+        # chunk_length_s=30 processes 30 second chunks
+        # batch_size=16 for GPU efficiency
+        result = self._pipe(
+            {"array": audio, "sampling_rate": sample_rate},
+            chunk_length_s=30,
+            batch_size=16,
+            return_timestamps=True,
+            generate_kwargs=generate_kwargs,
+        )
 
-        # Decode
-        transcription = self._processor.batch_decode(
-            predicted_ids,
-            skip_special_tokens=True,
-        )[0]
+        transcription = result["text"]
 
         return TranscriptionResult(
             text=transcription.strip(),
@@ -195,7 +190,7 @@ class HuggingFaceBackend(TranscriberBackend):
 
     def is_loaded(self) -> bool:
         """Check if model is loaded."""
-        return self._model is not None and self._processor is not None
+        return self._pipe is not None
 
 
 class MockBackend(TranscriberBackend):
