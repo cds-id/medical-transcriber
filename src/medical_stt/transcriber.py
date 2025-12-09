@@ -276,17 +276,19 @@ class MedicalTranscriber:
         self,
         audio: Union[np.ndarray, bytes],
         sample_rate: Optional[int] = None,
+        language: Optional[str] = None,
     ) -> TranscriptionResult:
         """Transcribe a complete audio segment."""
         if isinstance(audio, bytes):
             audio = np.frombuffer(audio, dtype=np.float32)
 
         sr = sample_rate or self.config.audio.sample_rate
+        lang = language or self.config.language
 
         return self._backend.transcribe(
             audio=audio,
             sample_rate=sr,
-            language=self.config.language,
+            language=lang,
         )
 
     def add_callback(
