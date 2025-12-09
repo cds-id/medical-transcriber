@@ -119,7 +119,7 @@ class HuggingFaceBackend(TranscriberBackend):
         import torch
 
         self._device = self.config.get_device()
-        torch_dtype = torch.float16 if self._device == "cuda" else torch.float32
+        self._torch_dtype = torch.float16 if self._device == "cuda" else torch.float32
 
         logger.info(f"Loading model {self.config.model_id} on {self._device}")
 
@@ -134,7 +134,7 @@ class HuggingFaceBackend(TranscriberBackend):
         )
         self._model = AutoModelForSpeechSeq2Seq.from_pretrained(
             self.config.model_id,
-            torch_dtype=torch_dtype,
+            torch_dtype=self._torch_dtype,
             low_cpu_mem_usage=True,
             **hf_kwargs,
         ).to(self._device)
@@ -160,7 +160,8 @@ class HuggingFaceBackend(TranscriberBackend):
             return_tensors="pt",
         )
 
-        input_features = inputs.input_features.to(self._device)
+        # Ensure input features match model dtype (fix float32/float16 mismatch on CUDA)
+        input_features = inputs.input_features.to(self._device, dtype=self._torch_dtype)
 
         # Generate
         generate_kwargs = {"task": self.config.task}
