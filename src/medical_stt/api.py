@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""FastAPI server for Medical STT with streaming and upload endpoints."""
+
+import io
+import os
+import tempfile
+import numpy as np
+from typing import Optional
+from pathlib import Path
+from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+
+from .config import Config, ModelType
+from .transcriber import MedicalTranscriber
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Medical Speech-to-Text API",
+    description="API for transcribing medical audio using Whisper",
+    version="1.0.0",
+)
+
+# Get static directory path
+STATIC_DIR = Path(__file__).parent.parent.parent / "static"
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global transcriber instance
+transcriber: Optional[MedicalTranscriber] = None
+
+
+def get_transcriber() -> MedicalTranscriber:
+    """Get or initialize the transcriber."""
+    global transcriber
+    if transcriber is None:
+        config = Config(
+            model_type=ModelType.WHISPER_LARGE_V3,
+            device="auto",
+            language="id",
+        )
+        transcriber = MedicalTranscriber(config=config, use_mock=False)
+        transcriber.load_model()
+    return transcriber
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Load model on startup."""
+    print("Loading model...")
+    get_transcriber()
+    print("Model loaded!")
+
+
+@app.get("/")
+async def root():
+    """Serve the web UI."""
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {
+        "status": "ok",
+        "service": "Medical STT API",
+        "endpoints": {
+            "upload": "/api/transcribe/upload",
+            "stream": "/api/transcribe/stream (WebSocket)",
+        }
+    }
+
+
+@app.post("/api/transcribe/upload")
+async def transcribe_upload(
+    file: UploadFile = File(...),
+    language: str = Query(default="id", description="Language code (id, en, de, etc.)"),
+):
+    """
+    Upload audio file and get transcription.
+
+    Supports: wav, mp3, flac, ogg, m4a
+    """
+    try:
+        # Read uploaded file
+        content = await file.read()
+
+        # Save to temp file for processing
+        suffix = f".{file.filename.split('.')[-1]}" if file.filename else ".wav"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # Load audio
+        from .audio_utils import load_audio_file
+        audio, sr = load_audio_file(tmp_path, target_sr=16000)
+
+        # Clean up temp file
+        import os
+        os.unlink(tmp_path)
+
+        # Get transcriber and transcribe
+        trans = get_transcriber()
+        result = trans.transcribe(audio, sample_rate=sr, language=language)
+
+        duration = len(audio) / sr
+
+        return JSONResponse(content={
+            "success": True,
+            "transcription": result.text,
+            "language": language,
+            "duration_seconds": round(duration, 2),
+            "filename": file.filename,
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+            }
+        )
+
+
+@app.websocket("/api/transcribe/stream")
+async def transcribe_stream(websocket: WebSocket):
+    """
+    WebSocket endpoint for streaming audio transcription.
+
+    Client sends audio chunks (bytes), server responds with transcriptions.
+
+    Protocol:
+    1. Client connects
+    2. Client sends JSON: {"action": "start", "language": "id", "sample_rate": 16000}
+    3. Client sends binary audio chunks
+    4. Server responds with JSON: {"transcription": "...", "is_final": false}
+    5. Client sends JSON: {"action": "stop"} to finalize
+    6. Server responds with final transcription
+    """
+    await websocket.accept()
+
+    audio_buffer = []
+    sample_rate = 16000
+    language = "id"
+
+    try:
+        while True:
+            data = await websocket.receive()
+
+            # Handle text messages (control commands)
+            if "text" in data:
+                import json
+                msg = json.loads(data["text"])
+                action = msg.get("action", "")
+
+                if action == "start":
+                    # Reset buffer and configure
+                    audio_buffer = []
+                    language = msg.get("language", "id")
+                    sample_rate = msg.get("sample_rate", 16000)
+                    await websocket.send_json({
+                        "status": "started",
+                        "language": language,
+                        "sample_rate": sample_rate,
+                    })
+
+                elif action == "stop":
+                    # Final transcription
+                    if audio_buffer:
+                        audio = np.concatenate(audio_buffer).astype(np.float32)
+                        trans = get_transcriber()
+                        result = trans.transcribe(audio, sample_rate=sample_rate, language=language)
+
+                        await websocket.send_json({
+                            "transcription": result.text,
+                            "is_final": True,
+                            "duration_seconds": round(len(audio) / sample_rate, 2),
+                        })
+                    else:
+                        await websocket.send_json({
+                            "transcription": "",
+                            "is_final": True,
+                            "duration_seconds": 0,
+                        })
+
+                    audio_buffer = []
+
+                elif action == "transcribe_now":
+                    # Transcribe current buffer without clearing
+                    if audio_buffer:
+                        audio = np.concatenate(audio_buffer).astype(np.float32)
+                        trans = get_transcriber()
+                        result = trans.transcribe(audio, sample_rate=sample_rate, language=language)
+
+                        await websocket.send_json({
+                            "transcription": result.text,
+                            "is_final": False,
+                            "duration_seconds": round(len(audio) / sample_rate, 2),
+                        })
+
+            # Handle binary messages (audio data)
+            elif "bytes" in data:
+                audio_bytes = data["bytes"]
+                # Convert bytes to numpy array (assuming float32 or int16)
+                try:
+                    # Try float32 first
+                    chunk = np.frombuffer(audio_bytes, dtype=np.float32)
+                except:
+                    # Fall back to int16 and convert
+                    chunk = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+
+                audio_buffer.append(chunk)
+
+                # Send acknowledgment
+                await websocket.send_json({
+                    "status": "chunk_received",
+                    "buffer_duration": round(sum(len(c) for c in audio_buffer) / sample_rate, 2),
+                })
+
+    except WebSocketDisconnect:
+        print("Client disconnected")
+    except Exception as e:
+        await websocket.send_json({
+            "error": str(e),
+        })
+
+
+@app.get("/api/models")
+async def list_models():
+    """List available models."""
+    return {
+        "models": [
+            {"id": "large", "name": "openai/whisper-large-v3", "size": "~3GB", "description": "Best accuracy"},
+            {"id": "turbo", "name": "openai/whisper-large-v3-turbo", "size": "~1.6GB", "description": "Fast & accurate"},
+            {"id": "medium", "name": "openai/whisper-medium", "size": "~1.5GB", "description": "Balanced"},
+            {"id": "small", "name": "openai/whisper-small", "size": "~500MB", "description": "Fastest"},
+        ],
+        "current": get_transcriber().config.model_id,
+    }
+
+
+def main():
+    """Run the API server."""
+    uvicorn.run(
+        "src.medical_stt.api:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+    )
+
+
+if __name__ == "__main__":
+    main()

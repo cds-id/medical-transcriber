@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical STT - Speech to Text</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            color: #444;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background: #f0f7ff;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-record {
+            background: #dc3545;
+        }
+        .btn-record:hover {
+            background: #c82333;
+        }
+        .btn-record.recording {
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .result {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .status {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .language-select {
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            margin-right: 10px;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 Medical Speech-to-Text</h1>
+
+        <!-- Upload Section -->
+        <div class="card">
+            <h2>📁 Upload Audio File</h2>
+            <div class="controls">
+                <select id="uploadLanguage" class="language-select">
+                    <option value="id">Indonesian</option>
+                    <option value="en">English</option>
+                    <option value="de">German</option>
+                </select>
+            </div>
+            <div class="upload-area" id="uploadArea">
+                <p>Drag & drop audio file here or click to select</p>
+                <p style="color: #999; font-size: 12px; margin-top: 10px;">Supports: WAV, MP3, FLAC, OGG, M4A</p>
+                <input type="file" id="fileInput" accept="audio/*">
+            </div>
+            <div class="status" id="uploadStatus"></div>
+            <div class="result" id="uploadResult">Transcription will appear here...</div>
+        </div>
+
+        <!-- Stream Section -->
+        <div class="card">
+            <h2>🎤 Record & Stream Audio</h2>
+            <div class="controls">
+                <select id="streamLanguage" class="language-select">
+                    <option value="id">Indonesian</option>
+                    <option value="en">English</option>
+                    <option value="de">German</option>
+                </select>
+                <button class="btn btn-record" id="recordBtn">Start Recording</button>
+                <button class="btn" id="transcribeBtn" disabled>Transcribe</button>
+            </div>
+            <div class="status" id="streamStatus">Click "Start Recording" to begin</div>
+            <div class="result" id="streamResult">Transcription will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        const WS_URL = `ws://${window.location.host}/api/transcribe/stream`;
+
+        // Upload functionality
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const uploadResult = document.getElementById('uploadResult');
+        const uploadLanguage = document.getElementById('uploadLanguage');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) uploadFile(file);
+        });
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) uploadFile(file);
+        });
+
+        async function uploadFile(file) {
+            uploadStatus.textContent = `Uploading ${file.name}...`;
+            uploadResult.textContent = 'Processing...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${uploadLanguage.value}`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    uploadStatus.textContent = `✓ Transcribed ${file.name} (${data.duration_seconds}s)`;
+                    uploadResult.textContent = data.transcription;
+                } else {
+                    uploadStatus.textContent = `✗ Error: ${data.error}`;
+                    uploadResult.textContent = 'Error occurred';
+                }
+            } catch (error) {
+                uploadStatus.textContent = `✗ Error: ${error.message}`;
+                uploadResult.textContent = 'Error occurred';
+            }
+        }
+
+        // Recording functionality
+        const recordBtn = document.getElementById('recordBtn');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const streamStatus = document.getElementById('streamStatus');
+        const streamResult = document.getElementById('streamResult');
+        const streamLanguage = document.getElementById('streamLanguage');
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        recordBtn.addEventListener('click', toggleRecording);
+        transcribeBtn.addEventListener('click', transcribeRecording);
+
+        async function toggleRecording() {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        audioChunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordBtn.textContent = 'Stop Recording';
+                    recordBtn.classList.add('recording');
+                    transcribeBtn.disabled = true;
+                    streamStatus.textContent = 'Recording...';
+                } catch (error) {
+                    streamStatus.textContent = `Error: ${error.message}`;
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.textContent = 'Start Recording';
+                recordBtn.classList.remove('recording');
+                transcribeBtn.disabled = false;
+                streamStatus.textContent = 'Recording stopped. Click "Transcribe" to process.';
+            }
+        }
+
+        async function transcribeRecording() {
+            if (audioChunks.length === 0) {
+                streamStatus.textContent = 'No recording to transcribe';
+                return;
+            }
+
+            streamStatus.textContent = 'Transcribing...';
+            streamResult.textContent = 'Processing...';
+            transcribeBtn.disabled = true;
+
+            try {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.webm');
+
+                const response = await fetch(`${API_URL}/api/transcribe/upload?language=${streamLanguage.value}`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    streamStatus.textContent = `✓ Transcribed (${data.duration_seconds}s)`;
+                    streamResult.textContent = data.transcription;
+                } else {
+                    streamStatus.textContent = `✗ Error: ${data.error}`;
+                    streamResult.textContent = 'Error occurred';
+                }
+            } catch (error) {
+                streamStatus.textContent = `✗ Error: ${error.message}`;
+                streamResult.textContent = 'Error occurred';
+            }
+
+            transcribeBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>
