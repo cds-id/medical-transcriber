@@ -51,6 +51,15 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
         "default_guidance": 0.0,
         "supports_negative": False,
     },
+    "z-image-turbo": {
+        "name": "Z-Image Turbo",
+        "repo": "Tongyi-MAI/Z-Image-Turbo",
+        "description": "Fast photorealistic, supports Chinese/English text",
+        "default_steps": 8,
+        "default_guidance": 3.5,
+        "supports_negative": True,
+        "pipeline_class": "ZiPiPipeline",
+    },
 }
 
 # Global model instance
@@ -134,6 +143,13 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 torch_dtype=torch_dtype,
                 variant="fp16" if _device == "cuda" else None,
             )
+        elif model_id == "z-image-turbo":
+            # Z-Image-Turbo uses ZiPiPipeline
+            from diffusers import ZiPiPipeline
+            _pipe = ZiPiPipeline.from_pretrained(
+                model_config["repo"],
+                torch_dtype=torch_dtype,
+            )
         else:
             # Standard diffusion pipeline for others
             _pipe = DiffusionPipeline.from_pretrained(
@@ -147,6 +163,12 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
         logger.warning(f"Failed with fp16 variant, trying without: {e}")
         if model_id == "sdxl-turbo":
             _pipe = AutoPipelineForText2Image.from_pretrained(
+                model_config["repo"],
+                torch_dtype=torch_dtype,
+            )
+        elif model_id == "z-image-turbo":
+            from diffusers import ZiPiPipeline
+            _pipe = ZiPiPipeline.from_pretrained(
                 model_config["repo"],
                 torch_dtype=torch_dtype,
             )
