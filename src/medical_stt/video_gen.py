@@ -198,10 +198,10 @@ def generate_video(
     import torch
     from diffusers.utils import export_to_video
 
-    # Set seed for reproducibility
+    # Set seed for reproducibility (generator must be on CPU for some pipelines)
     generator = None
     if seed is not None:
-        generator = torch.Generator(device=_device).manual_seed(seed)
+        generator = torch.Generator(device="cpu").manual_seed(seed)
 
     # Ensure dimensions are divisible by 32 (LTX requirement)
     height = height - (height % 32)
