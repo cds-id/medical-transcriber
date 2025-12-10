@@ -21,6 +21,7 @@ from .config import Config, ModelType
 from .transcriber import MedicalTranscriber
 from .postprocess import TranscriptionPostProcessor
 from . import image_gen
+from . import video_gen
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -702,6 +703,136 @@ async def image_model_status():
             "supports_negative": model_config.get("supports_negative"),
         } if current else None,
         "memory": image_gen.get_memory_usage(),
+    }
+
+
+# ============== Video Generation Endpoints ==============
+
+@app.get("/video")
+async def video_page(username: str = Depends(verify_credentials)):
+    """Serve the video generation page (protected)."""
+    return FileResponse(STATIC_DIR / "video.html")
+
+
+@app.get("/api/video/models")
+async def list_video_models():
+    """List available video generation models."""
+    models = video_gen.get_available_models()
+    current = video_gen.get_current_model()
+    return {
+        "models": [
+            {
+                "id": model_id,
+                "name": config["name"],
+                "description": config["description"],
+                "default_steps": config["default_steps"],
+                "default_guidance": config["default_guidance"],
+                "default_frames": config["default_frames"],
+                "default_fps": config["default_fps"],
+                "supports_negative": config["supports_negative"],
+            }
+            for model_id, config in models.items()
+        ],
+        "current_model": current,
+    }
+
+
+@app.post("/api/video/load")
+async def load_video_model(
+    model_id: str = Query(default="wan2.1-t2v-1.3b", description="Model ID to load"),
+):
+    """Load a video generation model."""
+    try:
+        video_gen.load_model(model_id)
+        model_config = video_gen.get_available_models().get(model_id, {})
+        return {
+            "success": True,
+            "message": f"{model_config.get('name', model_id)} loaded successfully",
+            "model_id": model_id,
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
+
+
+@app.post("/api/video/unload")
+async def unload_video_model():
+    """Unload current video model to free GPU memory."""
+    try:
+        video_gen.unload_model()
+        return {
+            "success": True,
+            "message": "Video model unloaded and GPU memory cleared",
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
+
+
+@app.post("/api/video/generate")
+async def generate_video(
+    prompt: str = Query(..., description="Text description of the video to generate"),
+    negative_prompt: str = Query(default="low quality, blurry, distorted", description="What to avoid in the video"),
+    num_frames: int = Query(default=33, ge=9, le=81, description="Number of frames (33 = ~2 sec)"),
+    height: int = Query(default=480, description="Video height"),
+    width: int = Query(default=848, description="Video width"),
+    steps: int = Query(default=25, ge=1, le=50, description="Number of inference steps"),
+    guidance: float = Query(default=5.0, ge=0, le=20, description="Guidance scale"),
+    seed: Optional[int] = Query(default=None, description="Random seed for reproducibility"),
+):
+    """Generate a video from text prompt."""
+    try:
+        if not video_gen.is_loaded():
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Video model not loaded. Please load a model first."},
+            )
+
+        output_path = video_gen.generate_video(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_frames=num_frames,
+            height=height,
+            width=width,
+            num_inference_steps=steps,
+            guidance_scale=guidance,
+            seed=seed,
+        )
+
+        return FileResponse(
+            output_path,
+            media_type="video/mp4",
+            filename=Path(output_path).name,
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
+
+
+@app.get("/api/video/status")
+async def video_model_status():
+    """Check current video model status."""
+    current = video_gen.get_current_model()
+    models = video_gen.get_available_models()
+    model_config = models.get(current, {}) if current else {}
+    return {
+        "loaded": video_gen.is_loaded(),
+        "model_id": current,
+        "model_name": model_config.get("name") if current else None,
+        "model_config": {
+            "default_steps": model_config.get("default_steps"),
+            "default_guidance": model_config.get("default_guidance"),
+            "default_frames": model_config.get("default_frames"),
+            "supports_negative": model_config.get("supports_negative"),
+        } if current else None,
+        "memory": video_gen.get_memory_usage(),
     }
 
 

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Generation - Wan2.1 T2V</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 {
+            color: #9d4edd;
+            text-align: center;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            color: #9d4edd;
+            margin: 0 15px;
+            text-decoration: none;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        .card {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #9d4edd;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-load {
+            background: #9d4edd;
+            color: white;
+        }
+        .btn-load:hover {
+            background: #7b2cbf;
+        }
+        .btn-unload {
+            background: #e63946;
+            color: white;
+        }
+        .btn-unload:hover {
+            background: #c1121f;
+        }
+        .btn-generate {
+            background: #06d6a0;
+            color: #1a1a2e;
+            font-weight: bold;
+        }
+        .btn-generate:hover {
+            background: #00b894;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        select, input, textarea {
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #333;
+            background: #0f0f23;
+            color: #eee;
+            font-size: 14px;
+        }
+        select {
+            min-width: 200px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 80px;
+            resize: vertical;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .status-box {
+            background: #0f0f23;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .status-item {
+            margin: 5px 0;
+        }
+        .status-loaded {
+            color: #06d6a0;
+        }
+        .status-unloaded {
+            color: #e63946;
+        }
+        #modelInfo {
+            padding: 10px;
+            background: #0f0f23;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+        #videoStatus {
+            padding: 15px;
+            background: #0f0f23;
+            border-radius: 5px;
+            min-height: 50px;
+        }
+        .video-container {
+            margin-top: 15px;
+        }
+        .video-container video {
+            max-width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+        .video-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .video-item {
+            background: #0f0f23;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .video-item video {
+            width: 100%;
+            display: block;
+        }
+        .video-item .video-info {
+            padding: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #333;
+            border-top: 3px solid #9d4edd;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎬 Video Generation</h1>
+
+    <div class="nav-links">
+        <a href="/">← Speech-to-Text</a>
+        <a href="/image">Image Generation</a>
+    </div>
+
+    <div class="card">
+        <h2>🖥️ GPU Status</h2>
+        <div id="gpuStatus" class="status-box">Loading...</div>
+    </div>
+
+    <div class="card">
+        <h2>🤖 Model Selection</h2>
+        <div class="controls">
+            <select id="modelSelect">
+                <option value="">Loading models...</option>
+            </select>
+            <button class="btn btn-load" id="loadModelBtn">Load Model</button>
+            <button class="btn btn-unload" id="unloadModelBtn">Unload Model</button>
+            <button class="btn" id="refreshGpuBtn">Refresh Status</button>
+        </div>
+        <div id="modelInfo"></div>
+    </div>
+
+    <div class="card">
+        <h2>🎥 Generate Video</h2>
+        <div class="form-group">
+            <label for="videoPrompt">Prompt</label>
+            <textarea id="videoPrompt" placeholder="Describe the video you want to generate...">A cat walking in a garden, sunny day, high quality</textarea>
+        </div>
+        <div class="form-group">
+            <label for="negativePrompt">Negative Prompt</label>
+            <textarea id="negativePrompt" style="min-height: 50px;">low quality, blurry, distorted, deformed</textarea>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="videoFrames">Frames</label>
+                <select id="videoFrames">
+                    <option value="17">17 (~1 sec)</option>
+                    <option value="33" selected>33 (~2 sec)</option>
+                    <option value="49">49 (~3 sec)</option>
+                    <option value="65">65 (~4 sec)</option>
+                    <option value="81">81 (~5 sec)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="videoResolution">Resolution</label>
+                <select id="videoResolution">
+                    <option value="480">480p (848x480)</option>
+                    <option value="720">720p (1280x720)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="videoSteps">Steps</label>
+                <input type="number" id="videoSteps" value="25" min="1" max="50">
+            </div>
+            <div class="form-group">
+                <label for="videoGuidance">Guidance</label>
+                <input type="number" id="videoGuidance" value="5.0" min="0" max="20" step="0.5">
+            </div>
+            <div class="form-group">
+                <label for="videoSeed">Seed (optional)</label>
+                <input type="number" id="videoSeed" placeholder="Random">
+            </div>
+        </div>
+        <button class="btn btn-generate" id="generateBtn">🎬 Generate Video</button>
+        <div id="videoStatus" style="margin-top: 15px;">Ready to generate...</div>
+    </div>
+
+    <div class="card">
+        <h2>📹 Generated Videos</h2>
+        <div id="videoGallery" class="video-gallery">
+            <p style="color: #999; text-align: center;">Generated videos will appear here...</p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        let availableModels = {};
+        let currentModelId = null;
+        let generatedVideos = [];
+
+        // Elements
+        const modelSelect = document.getElementById('modelSelect');
+        const modelInfo = document.getElementById('modelInfo');
+        const refreshGpuBtn = document.getElementById('refreshGpuBtn');
+        const loadModelBtn = document.getElementById('loadModelBtn');
+        const unloadModelBtn = document.getElementById('unloadModelBtn');
+        const gpuStatus = document.getElementById('gpuStatus');
+        const videoPrompt = document.getElementById('videoPrompt');
+        const negativePrompt = document.getElementById('negativePrompt');
+        const videoFrames = document.getElementById('videoFrames');
+        const videoResolution = document.getElementById('videoResolution');
+        const videoSteps = document.getElementById('videoSteps');
+        const videoGuidance = document.getElementById('videoGuidance');
+        const videoSeed = document.getElementById('videoSeed');
+        const generateBtn = document.getElementById('generateBtn');
+        const videoStatus = document.getElementById('videoStatus');
+        const videoGallery = document.getElementById('videoGallery');
+
+        // Event listeners
+        refreshGpuBtn.addEventListener('click', refreshGpuStatus);
+        loadModelBtn.addEventListener('click', loadModel);
+        unloadModelBtn.addEventListener('click', unloadModel);
+        generateBtn.addEventListener('click', generateVideo);
+        modelSelect.addEventListener('change', onModelSelect);
+
+        // Initial load
+        fetchModels();
+        refreshGpuStatus();
+
+        async function fetchModels() {
+            try {
+                const response = await fetch(`${API_URL}/api/video/models`);
+                const data = await response.json();
+
+                availableModels = {};
+                data.models.forEach(m => {
+                    availableModels[m.id] = m;
+                });
+                currentModelId = data.current_model;
+
+                // Populate dropdown
+                modelSelect.innerHTML = data.models.map(m =>
+                    `<option value="${m.id}" ${m.id === currentModelId ? 'selected' : ''}>${m.name}</option>`
+                ).join('');
+
+                onModelSelect();
+            } catch (error) {
+                modelSelect.innerHTML = '<option value="">Error loading models</option>';
+                modelInfo.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        function onModelSelect() {
+            const selectedId = modelSelect.value;
+            const model = availableModels[selectedId];
+
+            if (model) {
+                const loadedBadge = selectedId === currentModelId
+                    ? '<span style="color: #06d6a0; font-weight: bold;"> (Currently Loaded)</span>'
+                    : '';
+                modelInfo.innerHTML = `
+                    <strong>${model.name}</strong>${loadedBadge}<br>
+                    <span style="color: #aaa;">${model.description}</span><br>
+                    <small>Default: ${model.default_steps} steps, guidance ${model.default_guidance}, ${model.default_frames} frames</small>
+                `;
+
+                if (selectedId !== currentModelId) {
+                    videoSteps.value = model.default_steps;
+                    videoGuidance.value = model.default_guidance;
+                }
+            }
+        }
+
+        async function refreshGpuStatus() {
+            gpuStatus.textContent = 'Loading...';
+            try {
+                const [gpuRes, vidRes] = await Promise.all([
+                    fetch(`${API_URL}/api/gpu/status`),
+                    fetch(`${API_URL}/api/video/status`)
+                ]);
+                const gpuData = await gpuRes.json();
+                const vidData = await vidRes.json();
+
+                if (vidData.loaded && vidData.model_id) {
+                    currentModelId = vidData.model_id;
+                } else if (!vidData.loaded) {
+                    currentModelId = null;
+                }
+
+                if (gpuData.gpu_available) {
+                    const modelName = vidData.model_name || 'Video Model';
+                    const modelStatus = vidData.loaded
+                        ? `<span class="status-loaded">✓ ${modelName} Loaded</span>`
+                        : '<span class="status-unloaded">✗ Not Loaded</span>';
+
+                    gpuStatus.innerHTML = `
+                        <div class="status-item"><strong>GPU:</strong> ${gpuData.device_name}</div>
+                        <div class="status-item"><strong>Memory:</strong> ${gpuData.memory_allocated_mb} MB / ${gpuData.memory_total_mb} MB</div>
+                        <div class="status-item"><strong>Video Model:</strong> ${modelStatus}</div>
+                    `;
+                } else {
+                    gpuStatus.textContent = 'GPU not available';
+                }
+
+                onModelSelect();
+            } catch (error) {
+                gpuStatus.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function loadModel() {
+            const selectedId = modelSelect.value;
+            const model = availableModels[selectedId];
+            const modelName = model ? model.name : selectedId;
+
+            videoStatus.innerHTML = `<span class="loading-spinner"></span>Loading ${modelName} (this may take several minutes)...`;
+            loadModelBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/video/load?model_id=${encodeURIComponent(selectedId)}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    currentModelId = selectedId;
+                    videoStatus.innerHTML = `<span style="color: #06d6a0;">✓ ${data.message}</span>`;
+                    refreshGpuStatus();
+                    onModelSelect();
+                } else {
+                    videoStatus.innerHTML = `<span style="color: #e63946;">✗ Error: ${data.error}</span>`;
+                }
+            } catch (error) {
+                videoStatus.innerHTML = `<span style="color: #e63946;">✗ Error: ${error.message}</span>`;
+            }
+
+            loadModelBtn.disabled = false;
+        }
+
+        async function unloadModel() {
+            videoStatus.innerHTML = '<span class="loading-spinner"></span>Unloading model...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/video/unload`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    currentModelId = null;
+                    videoStatus.innerHTML = `<span style="color: #06d6a0;">✓ ${data.message}</span>`;
+                    refreshGpuStatus();
+                    onModelSelect();
+                } else {
+                    videoStatus.innerHTML = `<span style="color: #e63946;">✗ Error: ${data.error}</span>`;
+                }
+            } catch (error) {
+                videoStatus.innerHTML = `<span style="color: #e63946;">✗ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function generateVideo() {
+            const prompt = videoPrompt.value.trim();
+            if (!prompt) {
+                videoStatus.innerHTML = '<span style="color: #e63946;">Please enter a prompt</span>';
+                return;
+            }
+
+            const resolution = videoResolution.value;
+            const width = resolution === '720' ? 1280 : 848;
+            const height = resolution === '720' ? 720 : 480;
+
+            const params = new URLSearchParams({
+                prompt: prompt,
+                negative_prompt: negativePrompt.value,
+                num_frames: videoFrames.value,
+                width: width,
+                height: height,
+                steps: videoSteps.value,
+                guidance: videoGuidance.value,
+            });
+
+            if (videoSeed.value) {
+                params.append('seed', videoSeed.value);
+            }
+
+            videoStatus.innerHTML = `<span class="loading-spinner"></span>Generating video... This may take several minutes.`;
+            generateBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/video/generate?${params}`, {
+                    method: 'POST',
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const videoUrl = URL.createObjectURL(blob);
+
+                    // Add to gallery
+                    const videoData = {
+                        url: videoUrl,
+                        prompt: prompt,
+                        frames: videoFrames.value,
+                        resolution: `${width}x${height}`,
+                        timestamp: new Date().toLocaleTimeString(),
+                    };
+                    generatedVideos.unshift(videoData);
+                    updateGallery();
+
+                    videoStatus.innerHTML = `<span style="color: #06d6a0;">✓ Video generated successfully!</span>`;
+                } else {
+                    const data = await response.json();
+                    videoStatus.innerHTML = `<span style="color: #e63946;">✗ Error: ${data.error}</span>`;
+                }
+            } catch (error) {
+                videoStatus.innerHTML = `<span style="color: #e63946;">✗ Error: ${error.message}</span>`;
+            }
+
+            generateBtn.disabled = false;
+        }
+
+        function updateGallery() {
+            if (generatedVideos.length === 0) {
+                videoGallery.innerHTML = '<p style="color: #999; text-align: center;">Generated videos will appear here...</p>';
+                return;
+            }
+
+            videoGallery.innerHTML = generatedVideos.map((v, i) => `
+                <div class="video-item">
+                    <video controls loop>
+                        <source src="${v.url}" type="video/mp4">
+                    </video>
+                    <div class="video-info">
+                        <strong>${v.prompt.substring(0, 50)}${v.prompt.length > 50 ? '...' : ''}</strong><br>
+                        ${v.resolution} | ${v.frames} frames | ${v.timestamp}
+                        <br>
+                        <a href="${v.url}" download="video_${i}.mp4" style="color: #9d4edd;">Download</a>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
