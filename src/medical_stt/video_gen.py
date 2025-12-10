@@ -11,15 +11,16 @@ logger = logging.getLogger(__name__)
 
 # Available video models configuration
 AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
-    "wan2.1-t2v-1.3b": {
-        "name": "Wan2.1 T2V 1.3B",
-        "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
-        "description": "Text-to-video, 480P, ~8GB VRAM",
-        "default_steps": 25,
-        "default_guidance": 5.0,
-        "default_frames": 33,  # ~2 seconds at 16fps
-        "default_fps": 16,
+    "ltx-video": {
+        "name": "LTX-Video",
+        "repo": "Lightricks/LTX-Video",
+        "description": "Fast, lightweight (~6GB VRAM), 24fps",
+        "default_steps": 30,
+        "default_guidance": 3.0,
+        "default_frames": 97,  # ~4 seconds at 24fps
+        "default_fps": 24,
         "supports_negative": True,
+        "pipeline_class": "LTXPipeline",
     },
 }
 
@@ -100,39 +101,33 @@ def load_model(model_id: str = "wan2.1-t2v-1.3b", device: Optional[str] = None):
 
     try:
         import torch
-        from diffusers import WanPipeline
+        from diffusers import LTXPipeline
         from diffusers.utils import export_to_video
     except ImportError as e:
         raise ImportError(
             "Please install diffusers from source: pip install git+https://github.com/huggingface/diffusers"
         ) from e
 
-    # Use float16 for GPU (bfloat16 not supported on T4)
+    # Use float16 for GPU (bfloat16 not fully supported on T4)
     torch_dtype = torch.float16 if _device == "cuda" else torch.float32
 
     logger.info(f"Using dtype: {torch_dtype}")
 
-    # Load model
-    _pipe = WanPipeline.from_pretrained(
+    # Load LTX-Video model
+    _pipe = LTXPipeline.from_pretrained(
         model_config["repo"],
         torch_dtype=torch_dtype,
     )
 
-    # Enable CPU offload for T4 (16GB) - keeps model on CPU, moves to GPU as needed
+    # Move to GPU
+    _pipe = _pipe.to(_device)
+
+    # Enable memory optimizations
     if _device == "cuda":
-        logger.info("Enabling sequential CPU offload for memory optimization...")
-        _pipe.enable_sequential_cpu_offload()
-        # Also enable memory efficient attention
         try:
-            _pipe.enable_attention_slicing("auto")
+            _pipe.vae.enable_tiling()
         except Exception:
             pass
-        try:
-            _pipe.enable_vae_slicing()
-        except Exception:
-            pass
-    else:
-        _pipe = _pipe.to(_device)
 
     _current_model_id = model_id
     logger.info(f"{model_config['name']} loaded successfully")
@@ -169,12 +164,12 @@ def unload_model():
 
 def generate_video(
     prompt: str,
-    negative_prompt: str = "low quality, blurry, distorted",
-    num_frames: int = 33,
+    negative_prompt: str = "worst quality, inconsistent motion, blurry, jittery, distorted",
+    num_frames: int = 97,
     height: int = 480,
-    width: int = 848,
-    num_inference_steps: int = 25,
-    guidance_scale: float = 5.0,
+    width: int = 704,
+    num_inference_steps: int = 30,
+    guidance_scale: float = 3.0,
     seed: Optional[int] = None,
     output_path: Optional[str] = None,
 ) -> str:
@@ -184,11 +179,11 @@ def generate_video(
     Args:
         prompt: Text description of the video to generate
         negative_prompt: What to avoid in the video
-        num_frames: Number of frames (33 = ~2 sec at 16fps)
-        height: Video height (480 recommended for 1.3B)
-        width: Video width (848 for 16:9 aspect at 480p)
+        num_frames: Number of frames (must be 8n+1, e.g. 97 = ~4 sec at 24fps)
+        height: Video height (480 recommended, must be divisible by 32)
+        width: Video width (704 for 16:9 aspect, must be divisible by 32)
         num_inference_steps: Denoising steps
-        guidance_scale: How closely to follow prompt
+        guidance_scale: How closely to follow prompt (3.0 recommended for LTX)
         seed: Random seed for reproducibility
         output_path: Path to save video (auto-generated if None)
 
@@ -207,6 +202,14 @@ def generate_video(
     generator = None
     if seed is not None:
         generator = torch.Generator(device=_device).manual_seed(seed)
+
+    # Ensure dimensions are divisible by 32 (LTX requirement)
+    height = height - (height % 32)
+    width = width - (width % 32)
+
+    # Ensure num_frames is 8n+1 (LTX requirement)
+    if (num_frames - 1) % 8 != 0:
+        num_frames = ((num_frames - 1) // 8) * 8 + 1
 
     logger.info(f"Generating video: {prompt[:50]}...")
     logger.info(f"Settings: {num_frames} frames, {width}x{height}, {num_inference_steps} steps")
@@ -235,8 +238,8 @@ def generate_video(
         output_dir.mkdir(exist_ok=True)
         output_path = str(output_dir / f"video_{uuid.uuid4().hex[:8]}.mp4")
 
-    # Export to video file
-    export_to_video(frames, output_path, fps=16)
+    # Export to video file (LTX-Video uses 24fps)
+    export_to_video(frames, output_path, fps=24)
 
     logger.info(f"Video saved to: {output_path}")
     return output_path
