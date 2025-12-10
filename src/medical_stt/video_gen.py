@@ -118,17 +118,21 @@ def load_model(model_id: str = "wan2.1-t2v-1.3b", device: Optional[str] = None):
         torch_dtype=torch_dtype,
     )
 
-    _pipe = _pipe.to(_device)
-
-    # Enable memory optimizations for T4
+    # Enable CPU offload for T4 (16GB) - keeps model on CPU, moves to GPU as needed
     if _device == "cuda":
-        _pipe.enable_attention_slicing()
+        logger.info("Enabling sequential CPU offload for memory optimization...")
+        _pipe.enable_sequential_cpu_offload()
+        # Also enable memory efficient attention
+        try:
+            _pipe.enable_attention_slicing("auto")
+        except Exception:
+            pass
         try:
             _pipe.enable_vae_slicing()
         except Exception:
             pass
-        # Enable model CPU offload if memory is tight
-        # _pipe.enable_model_cpu_offload()
+    else:
+        _pipe = _pipe.to(_device)
 
     _current_model_id = model_id
     logger.info(f"{model_config['name']} loaded successfully")
