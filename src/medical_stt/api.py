@@ -746,7 +746,7 @@ async def list_video_models():
 
 @app.post("/api/video/load")
 async def load_video_model(
-    model_id: str = Query(default="ltx-video", description="Model ID to load"),
+    model_id: str = Query(default="modelscope-t2v", description="Model ID to load"),
 ):
     """Load a video generation model (async to prevent timeout)."""
     try:

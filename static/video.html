@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Generation - LTX-Video</title>
+    <title>Video Generation - ModelScope T2V</title>
     <style>
         * {
             box-sizing: border-box;
@@ -228,26 +228,26 @@
             <div class="form-group">
                 <label for="videoFrames">Frames</label>
                 <select id="videoFrames">
-                    <option value="25">25 (~1 sec)</option>
-                    <option value="49">49 (~2 sec)</option>
-                    <option value="97" selected>97 (~4 sec)</option>
-                    <option value="121">121 (~5 sec)</option>
+                    <option value="8">8 (~1 sec)</option>
+                    <option value="16" selected>16 (~2 sec)</option>
+                    <option value="24">24 (~3 sec)</option>
                 </select>
             </div>
             <div class="form-group">
                 <label for="videoResolution">Resolution</label>
                 <select id="videoResolution">
-                    <option value="480" selected>480p (704x480)</option>
-                    <option value="720">720p (1280x720)</option>
+                    <option value="256" selected>256x256 (low VRAM)</option>
+                    <option value="320">320x320</option>
+                    <option value="384">384x384</option>
                 </select>
             </div>
             <div class="form-group">
                 <label for="videoSteps">Steps</label>
-                <input type="number" id="videoSteps" value="30" min="1" max="50">
+                <input type="number" id="videoSteps" value="25" min="1" max="50">
             </div>
             <div class="form-group">
                 <label for="videoGuidance">Guidance</label>
-                <input type="number" id="videoGuidance" value="3.0" min="0" max="20" step="0.5">
+                <input type="number" id="videoGuidance" value="9.0" min="0" max="20" step="0.5">
             </div>
             <div class="form-group">
                 <label for="videoSeed">Seed (optional)</label>
@@ -435,9 +435,9 @@
                 return;
             }
 
-            const resolution = videoResolution.value;
-            const width = resolution === '720' ? 1280 : 704;
-            const height = resolution === '720' ? 720 : 480;
+            const resolution = parseInt(videoResolution.value);
+            const width = resolution;
+            const height = resolution;
 
             const params = new URLSearchParams({
                 prompt: prompt,
