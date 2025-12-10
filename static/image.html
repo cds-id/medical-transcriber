@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Generation - RealVisXL V4</title>
+    <title>Image Generation - Multiple Models</title>
     <style>
         * {
             box-sizing: border-box;
@@ -137,17 +137,21 @@
 <body>
     <a href="/" class="back-link">← Back to Speech-to-Text</a>
     <h1>🎨 Image Generation</h1>
-    <p style="text-align: center; color: #666;">RealVisXL V4 - Photorealistic Image Generation</p>
+    <p style="text-align: center; color: #666;">Multiple models available - switch without restarting</p>
 
-    <!-- GPU Status -->
+    <!-- Model Selection -->
     <div class="card">
-        <h2>🖥️ GPU Status</h2>
+        <h2>🤖 Model Selection</h2>
         <div class="controls">
-            <button class="btn" id="refreshGpuBtn">Refresh Status</button>
-            <button class="btn btn-load" id="loadModelBtn">Load RealVisXL V4</button>
+            <select id="modelSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; min-width: 200px;">
+                <option value="">Loading models...</option>
+            </select>
+            <button class="btn btn-load" id="loadModelBtn">Load Model</button>
             <button class="btn btn-unload" id="unloadModelBtn">Unload Model</button>
+            <button class="btn" id="refreshGpuBtn">Refresh Status</button>
         </div>
-        <div class="gpu-status" id="gpuStatus">Click "Refresh Status" to check GPU</div>
+        <div class="model-info" id="modelInfo" style="margin-top: 10px; padding: 10px; background: #e9ecef; border-radius: 5px; font-size: 14px;"></div>
+        <div class="gpu-status" id="gpuStatus" style="margin-top: 10px;">Click "Refresh Status" to check GPU</div>
     </div>
 
     <!-- Image Generation -->
@@ -189,8 +193,12 @@
     <script>
         const API_URL = window.location.origin;
         let generatedImages = [];
+        let availableModels = {};
+        let currentModelId = null;
 
         // Elements
+        const modelSelect = document.getElementById('modelSelect');
+        const modelInfo = document.getElementById('modelInfo');
         const refreshGpuBtn = document.getElementById('refreshGpuBtn');
         const loadModelBtn = document.getElementById('loadModelBtn');
         const unloadModelBtn = document.getElementById('unloadModelBtn');
@@ -210,9 +218,56 @@
         loadModelBtn.addEventListener('click', loadModel);
         unloadModelBtn.addEventListener('click', unloadModel);
         generateBtn.addEventListener('click', generateImage);
+        modelSelect.addEventListener('change', onModelSelect);
 
         // Initial load
+        fetchModels();
         refreshGpuStatus();
+
+        async function fetchModels() {
+            try {
+                const response = await fetch(`${API_URL}/api/image/models`);
+                const data = await response.json();
+
+                availableModels = {};
+                data.models.forEach(m => {
+                    availableModels[m.id] = m;
+                });
+                currentModelId = data.current_model;
+
+                // Populate dropdown
+                modelSelect.innerHTML = data.models.map(m =>
+                    `<option value="${m.id}" ${m.id === currentModelId ? 'selected' : ''}>${m.name}</option>`
+                ).join('');
+
+                // Update model info
+                onModelSelect();
+            } catch (error) {
+                modelSelect.innerHTML = '<option value="">Error loading models</option>';
+                modelInfo.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        function onModelSelect() {
+            const selectedId = modelSelect.value;
+            const model = availableModels[selectedId];
+
+            if (model) {
+                const loadedBadge = selectedId === currentModelId
+                    ? '<span style="color: #28a745; font-weight: bold;"> (Currently Loaded)</span>'
+                    : '';
+                modelInfo.innerHTML = `
+                    <strong>${model.name}</strong>${loadedBadge}<br>
+                    <span style="color: #666;">${model.description}</span><br>
+                    <small>Default: ${model.default_steps} steps, guidance ${model.default_guidance}</small>
+                `;
+
+                // Update steps default based on model
+                if (selectedId !== currentModelId) {
+                    imageSteps.value = model.default_steps;
+                }
+            }
+        }
 
         async function refreshGpuStatus() {
             gpuStatus.textContent = 'Loading...';
@@ -224,36 +279,53 @@
                 const gpuData = await gpuRes.json();
                 const imgData = await imgRes.json();
 
+                // Update current model from status
+                if (imgData.loaded && imgData.model_id) {
+                    currentModelId = imgData.model_id;
+                } else if (!imgData.loaded) {
+                    currentModelId = null;
+                }
+
                 if (gpuData.gpu_available) {
+                    const modelName = imgData.model_name || 'Image Model';
                     const modelStatus = imgData.loaded
-                        ? '<span class="status-loaded">✓ Loaded</span>'
+                        ? `<span class="status-loaded">✓ ${modelName} Loaded</span>`
                         : '<span class="status-unloaded">✗ Not Loaded</span>';
 
                     gpuStatus.innerHTML = `
                         <div class="status-item"><strong>GPU:</strong> ${gpuData.device_name}</div>
                         <div class="status-item"><strong>Memory:</strong> ${gpuData.memory_allocated_mb} MB / ${gpuData.memory_total_mb} MB</div>
-                        <div class="status-item"><strong>RealVisXL V4:</strong> ${modelStatus}</div>
+                        <div class="status-item"><strong>Image Model:</strong> ${modelStatus}</div>
                         <div class="status-item"><strong>Whisper:</strong> ${gpuData.whisper_loaded ? '<span class="status-loaded">✓ Loaded</span>' : '<span class="status-unloaded">✗ Not Loaded</span>'}</div>
                     `;
                 } else {
                     gpuStatus.textContent = 'GPU not available';
                 }
+
+                // Update model info display
+                onModelSelect();
             } catch (error) {
                 gpuStatus.textContent = `Error: ${error.message}`;
             }
         }
 
         async function loadModel() {
-            imageStatus.textContent = 'Loading RealVisXL V4 model (this may take a few minutes)...';
+            const selectedId = modelSelect.value;
+            const model = availableModels[selectedId];
+            const modelName = model ? model.name : selectedId;
+
+            imageStatus.textContent = `Loading ${modelName} (this may take a few minutes)...`;
             loadModelBtn.disabled = true;
 
             try {
-                const response = await fetch(`${API_URL}/api/image/load`, { method: 'POST' });
+                const response = await fetch(`${API_URL}/api/image/load?model_id=${encodeURIComponent(selectedId)}`, { method: 'POST' });
                 const data = await response.json();
 
                 if (data.success) {
+                    currentModelId = selectedId;
                     imageStatus.innerHTML = `<span style="color: #28a745;">✓ ${data.message}</span>`;
                     refreshGpuStatus();
+                    onModelSelect();
                 } else {
                     imageStatus.textContent = `✗ Error: ${data.error}`;
                 }
@@ -272,8 +344,10 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    currentModelId = null;
                     imageStatus.innerHTML = `<span style="color: #28a745;">✓ ${data.message}</span>`;
                     refreshGpuStatus();
+                    onModelSelect();
                 } else {
                     imageStatus.textContent = `✗ Error: ${data.error}`;
                 }

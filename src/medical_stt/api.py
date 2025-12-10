@@ -540,26 +540,70 @@ def _check_ollama_running() -> bool:
 
 # ============== Image Generation Endpoints ==============
 
+@app.get("/api/image/models")
+async def list_image_models():
+    """List available image generation models."""
+    models = image_gen.get_available_models()
+    current = image_gen.get_current_model()
+    return {
+        "models": [
+            {
+                "id": model_id,
+                "name": config["name"],
+                "description": config["description"],
+                "default_steps": config["default_steps"],
+                "default_guidance": config["default_guidance"],
+                "supports_negative": config["supports_negative"],
+            }
+            for model_id, config in models.items()
+        ],
+        "current_model": current,
+    }
+
+
 @app.post("/api/image/load")
-async def load_image_model():
+async def load_image_model(
+    model_id: str = Query(default="realvisxl-v4", description="Model ID to load"),
+):
     """
-    Load RealVisXL V4 model for image generation.
+    Load an image generation model.
+
+    Available models: realvisxl-v4, dreamshaper-xl, juggernaut-xl, playground-v2.5, sdxl-turbo
 
     IMPORTANT: Call /api/unload first to free GPU memory!
     """
     try:
-        if image_gen.is_loaded():
+        models = image_gen.get_available_models()
+        if model_id not in models:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": f"Unknown model: {model_id}",
+                    "available_models": list(models.keys()),
+                },
+            )
+
+        current = image_gen.get_current_model()
+        if current == model_id and image_gen.is_loaded():
             return JSONResponse(content={
                 "success": True,
-                "message": "RealVisXL V4 model already loaded",
+                "message": f"{models[model_id]['name']} already loaded",
+                "model_id": model_id,
                 "memory": image_gen.get_memory_usage(),
             })
 
-        image_gen.load_model()
+        image_gen.load_model(model_id)
 
         return JSONResponse(content={
             "success": True,
-            "message": "RealVisXL V4 loaded successfully (~7GB VRAM)",
+            "message": f"{models[model_id]['name']} loaded successfully",
+            "model_id": model_id,
+            "model_config": {
+                "default_steps": models[model_id]["default_steps"],
+                "default_guidance": models[model_id]["default_guidance"],
+                "supports_negative": models[model_id]["supports_negative"],
+            },
             "memory": image_gen.get_memory_usage(),
         })
     except Exception as e:
@@ -571,13 +615,15 @@ async def load_image_model():
 
 @app.post("/api/image/unload")
 async def unload_image_model():
-    """Unload RealVisXL V4 model to free GPU memory."""
+    """Unload current image model to free GPU memory."""
     try:
+        current = image_gen.get_current_model()
         unloaded = image_gen.unload_model()
         return JSONResponse(content={
             "success": True,
             "unloaded": unloaded,
-            "message": "RealVisXL V4 model unloaded" if unloaded else "RealVisXL V4 model was not loaded",
+            "message": f"Model unloaded" if unloaded else "No model was loaded",
+            "previous_model": current,
             "memory": image_gen.get_memory_usage(),
         })
     except Exception as e:
@@ -642,10 +688,19 @@ async def generate_image(
 
 @app.get("/api/image/status")
 async def image_model_status():
-    """Check if RealVisXL V4 model is loaded."""
+    """Check current image model status."""
+    current = image_gen.get_current_model()
+    models = image_gen.get_available_models()
+    model_config = models.get(current, {}) if current else {}
     return {
         "loaded": image_gen.is_loaded(),
-        "model": "RealVisXL V4" if image_gen.is_loaded() else None,
+        "model_id": current,
+        "model_name": model_config.get("name") if current else None,
+        "model_config": {
+            "default_steps": model_config.get("default_steps"),
+            "default_guidance": model_config.get("default_guidance"),
+            "supports_negative": model_config.get("supports_negative"),
+        } if current else None,
         "memory": image_gen.get_memory_usage(),
     }
 
