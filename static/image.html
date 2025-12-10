@@ -388,7 +388,11 @@
                 const response = await fetch(`${API_URL}/api/image/generate?${params}`, { method: 'POST' });
                 const data = await response.json();
 
-                if (data.success) {
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+
+                if (data.success && data.image_base64) {
                     const imageData = {
                         base64: data.image_base64,
                         prompt: data.prompt,
@@ -403,10 +407,12 @@
                     imageStatus.innerHTML = `<span style="color: #28a745;">✓ Image generated (${data.width}x${data.height})</span>`;
                     renderGallery();
                 } else {
-                    imageStatus.textContent = `✗ Error: ${data.error}`;
+                    imageStatus.textContent = `✗ Error: ${data.error || 'No image data received'}`;
+                    console.error('API response:', data);
                 }
             } catch (error) {
                 imageStatus.textContent = `✗ Error: ${error.message}`;
+                console.error('Fetch error:', error);
             }
 
             generateBtn.disabled = false;
