@@ -7,9 +7,11 @@ import gc
 import secrets
 import subprocess
 import tempfile
+import asyncio
 import numpy as np
 from typing import Optional
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +31,9 @@ app = FastAPI(
     description="API for transcribing medical audio using Whisper",
     version="1.0.0",
 )
+
+# Thread pool for running blocking model loads
+executor = ThreadPoolExecutor(max_workers=2)
 
 # Basic Auth configuration
 security = HTTPBasic()
@@ -594,7 +599,9 @@ async def load_image_model(
                 "memory": image_gen.get_memory_usage(),
             })
 
-        image_gen.load_model(model_id)
+        # Run blocking model load in thread pool
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(executor, image_gen.load_model, model_id)
 
         return JSONResponse(content={
             "success": True,
@@ -741,9 +748,12 @@ async def list_video_models():
 async def load_video_model(
     model_id: str = Query(default="wan2.1-t2v-1.3b", description="Model ID to load"),
 ):
-    """Load a video generation model."""
+    """Load a video generation model (async to prevent timeout)."""
     try:
-        video_gen.load_model(model_id)
+        # Run blocking model load in thread pool
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(executor, video_gen.load_model, model_id)
+
         model_config = video_gen.get_available_models().get(model_id, {})
         return {
             "success": True,
@@ -784,7 +794,7 @@ async def generate_video(
     guidance: float = Query(default=5.0, ge=0, le=20, description="Guidance scale"),
     seed: Optional[int] = Query(default=None, description="Random seed for reproducibility"),
 ):
-    """Generate a video from text prompt."""
+    """Generate a video from text prompt (async to prevent timeout)."""
     try:
         if not video_gen.is_loaded():
             return JSONResponse(
@@ -792,15 +802,20 @@ async def generate_video(
                 content={"success": False, "error": "Video model not loaded. Please load a model first."},
             )
 
-        output_path = video_gen.generate_video(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_frames=num_frames,
-            height=height,
-            width=width,
-            num_inference_steps=steps,
-            guidance_scale=guidance,
-            seed=seed,
+        # Run blocking generation in thread pool
+        loop = asyncio.get_event_loop()
+        output_path = await loop.run_in_executor(
+            executor,
+            lambda: video_gen.generate_video(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                num_frames=num_frames,
+                height=height,
+                width=width,
+                num_inference_steps=steps,
+                guidance_scale=guidance,
+                seed=seed,
+            )
         )
 
         return FileResponse(
