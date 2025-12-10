@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Generation - RealVisXL V4</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-load {
+            background: #fd7e14;
+        }
+        .btn-unload {
+            background: #6c757d;
+        }
+        .btn-generate {
+            background: #6f42c1;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .status {
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .gpu-status {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .gpu-status .status-item {
+            margin: 5px 0;
+        }
+        .status-loaded {
+            color: #28a745;
+        }
+        .status-unloaded {
+            color: #dc3545;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            font-family: inherit;
+            resize: vertical;
+        }
+        select, input[type="number"] {
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        .image-gallery {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .gallery-item {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            background: white;
+        }
+        .gallery-item img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .gallery-meta {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        .gallery-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Back to Speech-to-Text</a>
+    <h1>🎨 Image Generation</h1>
+    <p style="text-align: center; color: #666;">RealVisXL V4 - Photorealistic Image Generation</p>
+
+    <!-- GPU Status -->
+    <div class="card">
+        <h2>🖥️ GPU Status</h2>
+        <div class="controls">
+            <button class="btn" id="refreshGpuBtn">Refresh Status</button>
+            <button class="btn btn-load" id="loadModelBtn">Load RealVisXL V4</button>
+            <button class="btn btn-unload" id="unloadModelBtn">Unload Model</button>
+        </div>
+        <div class="gpu-status" id="gpuStatus">Click "Refresh Status" to check GPU</div>
+    </div>
+
+    <!-- Image Generation -->
+    <div class="card">
+        <h2>Generate Image</h2>
+        <textarea id="imagePrompt" rows="3" placeholder="Describe the image you want to generate... (e.g., 'a beautiful sunset over mountains, photorealistic, 8k')"></textarea>
+        <textarea id="negativePrompt" rows="2" placeholder="What to avoid... (default: low quality, blurry, distorted)" style="font-size: 12px;"></textarea>
+        <div class="controls">
+            <label>
+                Size:
+                <select id="imageSize">
+                    <option value="1024x1024">1024x1024</option>
+                    <option value="768x768">768x768</option>
+                    <option value="1024x768">1024x768 (Landscape)</option>
+                    <option value="768x1024">768x1024 (Portrait)</option>
+                </select>
+            </label>
+            <label>
+                Steps:
+                <input type="number" id="imageSteps" value="25" min="10" max="50" style="width: 60px;">
+            </label>
+            <label>
+                Seed:
+                <input type="number" id="imageSeed" placeholder="Random" style="width: 100px;">
+            </label>
+            <button class="btn btn-generate" id="generateBtn">Generate Image</button>
+        </div>
+        <div class="status" id="imageStatus">Load model first, then generate images</div>
+    </div>
+
+    <!-- Image Gallery -->
+    <div class="card">
+        <h2>Generated Images <span id="imageCount"></span></h2>
+        <div id="imageGallery">
+            <p style="color: #999; text-align: center;">Generated images will appear here...</p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        let generatedImages = [];
+
+        // Elements
+        const refreshGpuBtn = document.getElementById('refreshGpuBtn');
+        const loadModelBtn = document.getElementById('loadModelBtn');
+        const unloadModelBtn = document.getElementById('unloadModelBtn');
+        const gpuStatus = document.getElementById('gpuStatus');
+        const imagePrompt = document.getElementById('imagePrompt');
+        const negativePrompt = document.getElementById('negativePrompt');
+        const imageSize = document.getElementById('imageSize');
+        const imageSteps = document.getElementById('imageSteps');
+        const imageSeed = document.getElementById('imageSeed');
+        const generateBtn = document.getElementById('generateBtn');
+        const imageStatus = document.getElementById('imageStatus');
+        const imageGallery = document.getElementById('imageGallery');
+        const imageCount = document.getElementById('imageCount');
+
+        // Event listeners
+        refreshGpuBtn.addEventListener('click', refreshGpuStatus);
+        loadModelBtn.addEventListener('click', loadModel);
+        unloadModelBtn.addEventListener('click', unloadModel);
+        generateBtn.addEventListener('click', generateImage);
+
+        // Initial load
+        refreshGpuStatus();
+
+        async function refreshGpuStatus() {
+            gpuStatus.textContent = 'Loading...';
+            try {
+                const [gpuRes, imgRes] = await Promise.all([
+                    fetch(`${API_URL}/api/gpu/status`),
+                    fetch(`${API_URL}/api/image/status`)
+                ]);
+                const gpuData = await gpuRes.json();
+                const imgData = await imgRes.json();
+
+                if (gpuData.gpu_available) {
+                    const modelStatus = imgData.loaded
+                        ? '<span class="status-loaded">✓ Loaded</span>'
+                        : '<span class="status-unloaded">✗ Not Loaded</span>';
+
+                    gpuStatus.innerHTML = `
+                        <div class="status-item"><strong>GPU:</strong> ${gpuData.device_name}</div>
+                        <div class="status-item"><strong>Memory:</strong> ${gpuData.memory_allocated_mb} MB / ${gpuData.memory_total_mb} MB</div>
+                        <div class="status-item"><strong>RealVisXL V4:</strong> ${modelStatus}</div>
+                        <div class="status-item"><strong>Whisper:</strong> ${gpuData.whisper_loaded ? '<span class="status-loaded">✓ Loaded</span>' : '<span class="status-unloaded">✗ Not Loaded</span>'}</div>
+                    `;
+                } else {
+                    gpuStatus.textContent = 'GPU not available';
+                }
+            } catch (error) {
+                gpuStatus.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function loadModel() {
+            imageStatus.textContent = 'Loading RealVisXL V4 model (this may take a few minutes)...';
+            loadModelBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/image/load`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    imageStatus.innerHTML = `<span style="color: #28a745;">✓ ${data.message}</span>`;
+                    refreshGpuStatus();
+                } else {
+                    imageStatus.textContent = `✗ Error: ${data.error}`;
+                }
+            } catch (error) {
+                imageStatus.textContent = `✗ Error: ${error.message}`;
+            }
+
+            loadModelBtn.disabled = false;
+        }
+
+        async function unloadModel() {
+            imageStatus.textContent = 'Unloading model...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/image/unload`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    imageStatus.innerHTML = `<span style="color: #28a745;">✓ ${data.message}</span>`;
+                    refreshGpuStatus();
+                } else {
+                    imageStatus.textContent = `✗ Error: ${data.error}`;
+                }
+            } catch (error) {
+                imageStatus.textContent = `✗ Error: ${error.message}`;
+            }
+        }
+
+        async function generateImage() {
+            const prompt = imagePrompt.value.trim();
+            if (!prompt) {
+                imageStatus.textContent = 'Please enter a prompt';
+                return;
+            }
+
+            const [width, height] = imageSize.value.split('x').map(Number);
+            const steps = parseInt(imageSteps.value);
+            const seed = imageSeed.value ? parseInt(imageSeed.value) : null;
+
+            imageStatus.textContent = 'Generating image... (10-30 seconds)';
+            generateBtn.disabled = true;
+
+            try {
+                const negPrompt = negativePrompt.value.trim() || 'low quality, blurry, distorted, deformed, ugly, bad anatomy';
+                const params = new URLSearchParams({
+                    prompt: prompt,
+                    negative_prompt: negPrompt,
+                    width: width,
+                    height: height,
+                    steps: steps,
+                });
+                if (seed) params.append('seed', seed);
+
+                const response = await fetch(`${API_URL}/api/image/generate?${params}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    const imageData = {
+                        base64: data.image_base64,
+                        prompt: data.prompt,
+                        width: data.width,
+                        height: data.height,
+                        seed: data.seed,
+                        timestamp: new Date().toLocaleString()
+                    };
+                    generatedImages.unshift(imageData);
+                    if (generatedImages.length > 20) generatedImages.pop();
+
+                    imageStatus.innerHTML = `<span style="color: #28a745;">✓ Image generated (${data.width}x${data.height})</span>`;
+                    renderGallery();
+                } else {
+                    imageStatus.textContent = `✗ Error: ${data.error}`;
+                }
+            } catch (error) {
+                imageStatus.textContent = `✗ Error: ${error.message}`;
+            }
+
+            generateBtn.disabled = false;
+        }
+
+        function renderGallery() {
+            if (generatedImages.length === 0) {
+                imageGallery.innerHTML = '<p style="color: #999; text-align: center;">Generated images will appear here...</p>';
+                imageCount.textContent = '';
+                return;
+            }
+
+            imageCount.textContent = `(${generatedImages.length})`;
+
+            let html = '<div class="image-gallery">';
+            generatedImages.forEach((img, index) => {
+                html += `
+                    <div class="gallery-item">
+                        <img src="data:image/png;base64,${img.base64}" alt="${img.prompt}">
+                        <div class="gallery-meta">
+                            <p><strong>Prompt:</strong> ${img.prompt}</p>
+                            <p><strong>Size:</strong> ${img.width}x${img.height} | <strong>Seed:</strong> ${img.seed || 'Random'} | <strong>Time:</strong> ${img.timestamp}</p>
+                        </div>
+                        <div class="gallery-actions">
+                            <a href="data:image/png;base64,${img.base64}" download="image-${Date.now()}-${index}.png" class="btn">Download</a>
+                            <button class="btn btn-danger" onclick="deleteImage(${index})">Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            if (generatedImages.length > 1) {
+                html += `
+                    <div style="margin-top: 15px; text-align: center;">
+                        <button class="btn btn-unload" onclick="clearAllImages()">Clear All (${generatedImages.length} images)</button>
+                    </div>
+                `;
+            }
+
+            imageGallery.innerHTML = html;
+        }
+
+        function deleteImage(index) {
+            generatedImages.splice(index, 1);
+            renderGallery();
+        }
+
+        function clearAllImages() {
+            if (confirm('Clear all generated images?')) {
+                generatedImages = [];
+                renderGallery();
+            }
+        }
+    </script>
+</body>
+</html>

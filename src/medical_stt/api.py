@@ -4,15 +4,17 @@
 import io
 import os
 import gc
+import secrets
 import subprocess
 import tempfile
 import numpy as np
 from typing import Optional
 from pathlib import Path
-from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, Query
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import uvicorn
 
 from .config import Config, ModelType
@@ -26,6 +28,27 @@ app = FastAPI(
     description="API for transcribing medical audio using Whisper",
     version="1.0.0",
 )
+
+# Basic Auth configuration
+security = HTTPBasic()
+
+# Get credentials from environment variables (with defaults for development)
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "medical123")
+
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    """Verify basic auth credentials."""
+    correct_username = secrets.compare_digest(credentials.username, AUTH_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, AUTH_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 
 # Get static directory path
 STATIC_DIR = Path(__file__).parent.parent.parent / "static"
@@ -78,14 +101,20 @@ async def startup_event():
 
 
 @app.get("/")
-async def root():
-    """Serve the web UI."""
+async def root(username: str = Depends(verify_credentials)):
+    """Serve the web UI (protected)."""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/image")
+async def image_page(username: str = Depends(verify_credentials)):
+    """Serve the image generation page (protected)."""
+    return FileResponse(STATIC_DIR / "image.html")
 
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
+    """Health check endpoint (public)."""
     return {
         "status": "ok",
         "service": "Medical STT API",
