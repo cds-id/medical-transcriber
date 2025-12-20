@@ -160,6 +160,18 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 model_config["repo"],
                 torch_dtype=torch_dtype,
             )
+        elif model_id == "pony-diffusion-v4":
+            # Pony Diffusion uses single safetensors file
+            from diffusers import StableDiffusionPipeline
+            from huggingface_hub import hf_hub_download
+            model_path = hf_hub_download(
+                repo_id=model_config["repo"],
+                filename="safetensors/pony_v4.safetensors",
+            )
+            _pipe = StableDiffusionPipeline.from_single_file(
+                model_path,
+                torch_dtype=torch_dtype,
+            )
         else:
             # Standard diffusion pipeline for others
             _pipe = DiffusionPipeline.from_pretrained(
@@ -180,6 +192,17 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
             from diffusers import ZiPiPipeline
             _pipe = ZiPiPipeline.from_pretrained(
                 model_config["repo"],
+                torch_dtype=torch_dtype,
+            )
+        elif model_id == "pony-diffusion-v4":
+            from diffusers import StableDiffusionPipeline
+            from huggingface_hub import hf_hub_download
+            model_path = hf_hub_download(
+                repo_id=model_config["repo"],
+                filename="safetensors/pony_v4.safetensors",
+            )
+            _pipe = StableDiffusionPipeline.from_single_file(
+                model_path,
                 torch_dtype=torch_dtype,
             )
         else:
