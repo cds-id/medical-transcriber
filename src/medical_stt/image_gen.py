@@ -60,6 +60,16 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
         "supports_negative": True,
         "pipeline_class": "ZiPiPipeline",
     },
+    "pony-diffusion-v4": {
+        "name": "Pony Diffusion V4",
+        "repo": "AstraliteHeart/pony-diffusion-v4",
+        "description": "Anime/pony style (SD 1.5, 512x512)",
+        "default_steps": 30,
+        "default_guidance": 7.0,
+        "default_width": 512,
+        "default_height": 512,
+        "supports_negative": True,
+    },
 }
 
 # Global model instance
