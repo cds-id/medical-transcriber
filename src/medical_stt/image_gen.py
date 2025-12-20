@@ -11,6 +11,22 @@ logger = logging.getLogger(__name__)
 
 # Available models configuration
 AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
+    "realvisxl-v5": {
+        "name": "RealVisXL V5.0",
+        "repo": "SG161222/RealVisXL_V5.0",
+        "description": "Photorealistic, latest version",
+        "default_steps": 25,
+        "default_guidance": 7.0,
+        "supports_negative": True,
+    },
+    "realvisxl-v5-lightning": {
+        "name": "RealVisXL V5.0 Lightning",
+        "repo": "SG161222/RealVisXL_V5.0_Lightning",
+        "description": "Fast photorealistic (4-8 steps)",
+        "default_steps": 6,
+        "default_guidance": 2.0,
+        "supports_negative": True,
+    },
     "realvisxl-v4": {
         "name": "RealVisXL V4",
         "repo": "SG161222/RealVisXL_V4.0",
