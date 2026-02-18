@@ -200,21 +200,15 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 torch_dtype=torch_dtype,
             )
         elif model_id == "deepfloyd-if-xl":
-            # DeepFloyd IF: load T5 encoder in 8-bit to fit in ~15GB VRAM
-            from transformers import T5EncoderModel
-            text_encoder = T5EncoderModel.from_pretrained(
-                model_config["repo"],
-                subfolder="text_encoder",
-                device_map="auto",
-                load_in_8bit=True,
-                variant="8bit",
-            )
+            # DeepFloyd IF: fp16 with CPU offload, no safety checker to save VRAM
             from diffusers import IFPipeline
             _pipe = IFPipeline.from_pretrained(
                 model_config["repo"],
-                text_encoder=text_encoder,
                 variant="fp16" if _device == "cuda" else None,
                 torch_dtype=torch_dtype,
+                safety_checker=None,
+                watermarker=None,
+                requires_safety_checker=False,
             )
         else:
             # Standard diffusion pipeline for others
@@ -250,19 +244,13 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 torch_dtype=torch_dtype,
             )
         elif model_id == "deepfloyd-if-xl":
-            from transformers import T5EncoderModel
-            text_encoder = T5EncoderModel.from_pretrained(
-                model_config["repo"],
-                subfolder="text_encoder",
-                device_map="auto",
-                load_in_8bit=True,
-                variant="8bit",
-            )
             from diffusers import IFPipeline
             _pipe = IFPipeline.from_pretrained(
                 model_config["repo"],
-                text_encoder=text_encoder,
                 torch_dtype=torch_dtype,
+                safety_checker=None,
+                watermarker=None,
+                requires_safety_checker=False,
             )
         else:
             _pipe = DiffusionPipeline.from_pretrained(
@@ -271,9 +259,9 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 use_safetensors=True,
             )
 
-    # DeepFloyd IF: T5 is already on GPU via 8-bit device_map, move only UNet
+    # DeepFloyd IF: CPU offload moves T5/UNet to GPU one at a time (~11GB peak)
     if model_config.get("cpu_offload"):
-        _pipe.unet.to(_device)
+        _pipe.enable_model_cpu_offload()
     else:
         _pipe = _pipe.to(_device)
 
@@ -367,21 +355,26 @@ def generate_image(
         guidance_scale = model_config.get("default_guidance", 7.0)
 
     # Set seed for reproducibility
+    # CPU-offloaded pipelines need generator on CPU
     generator = None
     if seed is not None:
-        generator = torch.Generator(device=_device).manual_seed(seed)
+        gen_device = "cpu" if model_config.get("cpu_offload") else _device
+        generator = torch.Generator(device=gen_device).manual_seed(seed)
 
     logger.info(f"Generating image with {_current_model_id}: {prompt[:50]}...")
 
     # Build generation kwargs
     gen_kwargs = {
         "prompt": prompt,
-        "width": width,
-        "height": height,
         "num_inference_steps": num_inference_steps,
         "guidance_scale": guidance_scale,
         "generator": generator,
     }
+
+    # DeepFloyd IF Stage I always generates 64x64, doesn't accept width/height
+    if not model_config.get("cpu_offload"):
+        gen_kwargs["width"] = width
+        gen_kwargs["height"] = height
 
     # Only add negative_prompt if model supports it
     if model_config.get("supports_negative", True) and negative_prompt:
