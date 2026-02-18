@@ -97,6 +97,26 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
         "supports_negative": True,
         "cpu_offload": True,
     },
+    "flux-schnell": {
+        "name": "FLUX.1 Schnell",
+        "repo": "black-forest-labs/FLUX.1-schnell",
+        "description": "Fast 12B text-to-image (4 steps, Apache 2.0)",
+        "default_steps": 4,
+        "default_guidance": 0.0,
+        "supports_negative": False,
+        "sequential_offload": True,
+        "max_sequence_length": 256,
+    },
+    "flux-dev": {
+        "name": "FLUX.1 Dev",
+        "repo": "black-forest-labs/FLUX.1-dev",
+        "description": "High quality 12B text-to-image (28 steps, gated license)",
+        "default_steps": 28,
+        "default_guidance": 3.5,
+        "supports_negative": True,
+        "sequential_offload": True,
+        "max_sequence_length": 512,
+    },
 }
 
 # Global model instance
@@ -210,6 +230,13 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 watermarker=None,
                 requires_safety_checker=False,
             )
+        elif model_id in ("flux-schnell", "flux-dev"):
+            # FLUX: 12B params, needs bfloat16 and sequential offload for 15GB GPU
+            from diffusers import FluxPipeline
+            _pipe = FluxPipeline.from_pretrained(
+                model_config["repo"],
+                torch_dtype=torch.bfloat16,
+            )
         else:
             # Standard diffusion pipeline for others
             _pipe = DiffusionPipeline.from_pretrained(
@@ -252,6 +279,12 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 watermarker=None,
                 requires_safety_checker=False,
             )
+        elif model_id in ("flux-schnell", "flux-dev"):
+            from diffusers import FluxPipeline
+            _pipe = FluxPipeline.from_pretrained(
+                model_config["repo"],
+                torch_dtype=torch.bfloat16,
+            )
         else:
             _pipe = DiffusionPipeline.from_pretrained(
                 model_config["repo"],
@@ -259,8 +292,13 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 use_safetensors=True,
             )
 
-    # DeepFloyd IF: CPU offload moves T5/UNet to GPU one at a time (~11GB peak)
-    if model_config.get("cpu_offload"):
+    # Device placement
+    if model_config.get("sequential_offload"):
+        # FLUX: 12B transformer doesn't fit in 15GB, offload individual layers
+        _pipe.enable_sequential_cpu_offload()
+        _pipe.vae.enable_slicing()
+        _pipe.vae.enable_tiling()
+    elif model_config.get("cpu_offload"):
         _pipe.enable_model_cpu_offload()
     else:
         _pipe = _pipe.to(_device)
@@ -355,10 +393,11 @@ def generate_image(
         guidance_scale = model_config.get("default_guidance", 7.0)
 
     # Set seed for reproducibility
-    # CPU-offloaded pipelines need generator on CPU
+    # CPU/sequential-offloaded pipelines need generator on CPU
     generator = None
     if seed is not None:
-        gen_device = "cpu" if model_config.get("cpu_offload") else _device
+        needs_cpu_gen = model_config.get("cpu_offload") or model_config.get("sequential_offload")
+        gen_device = "cpu" if needs_cpu_gen else _device
         generator = torch.Generator(device=gen_device).manual_seed(seed)
 
     logger.info(f"Generating image with {_current_model_id}: {prompt[:50]}...")
@@ -375,6 +414,10 @@ def generate_image(
     if not model_config.get("cpu_offload"):
         gen_kwargs["width"] = width
         gen_kwargs["height"] = height
+
+    # FLUX models need max_sequence_length
+    if model_config.get("max_sequence_length"):
+        gen_kwargs["max_sequence_length"] = model_config["max_sequence_length"]
 
     # Only add negative_prompt if model supports it
     if model_config.get("supports_negative", True) and negative_prompt:
