@@ -251,9 +251,9 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 use_safetensors=True,
             )
 
-    # DeepFloyd IF needs CPU offloading due to large T5 encoder (~14GB)
+    # DeepFloyd IF needs sequential CPU offloading due to large T5 encoder
     if model_config.get("cpu_offload"):
-        _pipe.enable_model_cpu_offload()
+        _pipe.enable_sequential_cpu_offload()
     else:
         _pipe = _pipe.to(_device)
 
