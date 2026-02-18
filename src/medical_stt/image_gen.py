@@ -200,9 +200,19 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 torch_dtype=torch_dtype,
             )
         elif model_id == "deepfloyd-if-xl":
-            # DeepFloyd IF uses IFPipeline with T5 text encoder
-            _pipe = DiffusionPipeline.from_pretrained(
+            # DeepFloyd IF: load T5 encoder in 8-bit to fit in ~15GB VRAM
+            from transformers import T5EncoderModel
+            text_encoder = T5EncoderModel.from_pretrained(
                 model_config["repo"],
+                subfolder="text_encoder",
+                device_map="auto",
+                load_in_8bit=True,
+                variant="8bit",
+            )
+            from diffusers import IFPipeline
+            _pipe = IFPipeline.from_pretrained(
+                model_config["repo"],
+                text_encoder=text_encoder,
                 variant="fp16" if _device == "cuda" else None,
                 torch_dtype=torch_dtype,
             )
@@ -240,8 +250,18 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 torch_dtype=torch_dtype,
             )
         elif model_id == "deepfloyd-if-xl":
-            _pipe = DiffusionPipeline.from_pretrained(
+            from transformers import T5EncoderModel
+            text_encoder = T5EncoderModel.from_pretrained(
                 model_config["repo"],
+                subfolder="text_encoder",
+                device_map="auto",
+                load_in_8bit=True,
+                variant="8bit",
+            )
+            from diffusers import IFPipeline
+            _pipe = IFPipeline.from_pretrained(
+                model_config["repo"],
+                text_encoder=text_encoder,
                 torch_dtype=torch_dtype,
             )
         else:
@@ -251,9 +271,9 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 use_safetensors=True,
             )
 
-    # DeepFloyd IF needs sequential CPU offloading due to large T5 encoder
+    # DeepFloyd IF uses CPU offload (text encoder already on auto device_map)
     if model_config.get("cpu_offload"):
-        _pipe.enable_sequential_cpu_offload()
+        _pipe.enable_model_cpu_offload()
     else:
         _pipe = _pipe.to(_device)
 

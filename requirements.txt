@@ -22,6 +22,7 @@ python-multipart>=0.0.6
 diffusers @ git+https://github.com/huggingface/diffusers
 huggingface_hub>=0.20.0
 accelerate>=0.25.0
+bitsandbytes>=0.41.0
 safetensors>=0.4.0
 sentencepiece>=0.1.99
 protobuf>=4.25.0
