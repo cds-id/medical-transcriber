@@ -271,9 +271,9 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 use_safetensors=True,
             )
 
-    # DeepFloyd IF uses CPU offload (text encoder already on auto device_map)
+    # DeepFloyd IF: T5 is already on GPU via 8-bit device_map, move only UNet
     if model_config.get("cpu_offload"):
-        _pipe.enable_model_cpu_offload()
+        _pipe.unet.to(_device)
     else:
         _pipe = _pipe.to(_device)
 
