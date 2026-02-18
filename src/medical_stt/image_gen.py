@@ -86,6 +86,17 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
         "default_height": 512,
         "supports_negative": True,
     },
+    "deepfloyd-if-xl": {
+        "name": "DeepFloyd IF-I-XL",
+        "repo": "DeepFloyd/IF-I-XL-v1.0",
+        "description": "Pixel-based text-to-image, 4.3B params (Stage I, 64x64)",
+        "default_steps": 100,
+        "default_guidance": 7.0,
+        "default_width": 64,
+        "default_height": 64,
+        "supports_negative": True,
+        "cpu_offload": True,
+    },
 }
 
 # Global model instance
@@ -188,6 +199,13 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 model_path,
                 torch_dtype=torch_dtype,
             )
+        elif model_id == "deepfloyd-if-xl":
+            # DeepFloyd IF uses IFPipeline with T5 text encoder
+            _pipe = DiffusionPipeline.from_pretrained(
+                model_config["repo"],
+                variant="fp16" if _device == "cuda" else None,
+                torch_dtype=torch_dtype,
+            )
         else:
             # Standard diffusion pipeline for others
             _pipe = DiffusionPipeline.from_pretrained(
@@ -221,6 +239,11 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 model_path,
                 torch_dtype=torch_dtype,
             )
+        elif model_id == "deepfloyd-if-xl":
+            _pipe = DiffusionPipeline.from_pretrained(
+                model_config["repo"],
+                torch_dtype=torch_dtype,
+            )
         else:
             _pipe = DiffusionPipeline.from_pretrained(
                 model_config["repo"],
@@ -228,7 +251,11 @@ def load_model(model_id: str = "realvisxl-v4", device: Optional[str] = None):
                 use_safetensors=True,
             )
 
-    _pipe = _pipe.to(_device)
+    # DeepFloyd IF needs CPU offloading due to large T5 encoder (~14GB)
+    if model_config.get("cpu_offload"):
+        _pipe.enable_model_cpu_offload()
+    else:
+        _pipe = _pipe.to(_device)
 
     # Enable memory optimizations
     if _device == "cuda":

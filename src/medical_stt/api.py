@@ -574,7 +574,7 @@ async def load_image_model(
     """
     Load an image generation model.
 
-    Available models: realvisxl-v4, dreamshaper-xl, juggernaut-xl, playground-v2.5, sdxl-turbo
+    Available models: realvisxl-v4, dreamshaper-xl, juggernaut-xl, playground-v2.5, sdxl-turbo, deepfloyd-if-xl
 
     IMPORTANT: Call /api/unload first to free GPU memory!
     """
