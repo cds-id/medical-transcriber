@@ -26,6 +26,7 @@ safetensors>=0.4.0
 sentencepiece>=0.1.99
 protobuf>=4.25.0
 ftfy>=6.1.0
+beautifulsoup4>=4.12.0
 opencv-python>=4.8.0
 
 # LLM post-processing
